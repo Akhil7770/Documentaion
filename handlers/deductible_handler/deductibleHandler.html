@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Deductible Handler Deep Dive</title>
+    <style>
+        @page {
+            margin: 0.75in;
+        }
+        @media print {
+            body { font-size: 10pt; }
+            h1 { page-break-before: always; margin-top: 0; }
+            h1:first-of-type { page-break-before: auto; }
+            h2 { page-break-before: always; margin-top: 0; }
+            h2:first-of-type { page-break-before: auto; }
+            pre, table { page-break-inside: avoid; }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            line-height: 1.7;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #2c3e50;
+        }
+        .cover {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: -40px -20px 60px -20px;
+            padding: 100px 20px;
+            page-break-after: always;
+        }
+        .cover h1 {
+            font-size: 3.5em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .cover .subtitle {
+            font-size: 1.8em;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #764ba2;
+            padding-bottom: 15px;
+            margin-top: 60px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 12px;
+            margin-top: 50px;
+            font-size: 2em;
+        }
+        h3 {
+            color: #667eea;
+            margin-top: 35px;
+            font-size: 1.5em;
+        }
+        h4 {
+            color: #764ba2;
+            margin-top: 25px;
+            font-size: 1.2em;
+        }
+        code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: Monaco, 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        pre code {
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 25px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 14px;
+            text-align: left;
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        li {
+            margin: 10px 0;
+        }
+        .footer {
+            margin-top: 80px;
+            padding-top: 30px;
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <h1>Deductible Handler</h1>
+        <div class="subtitle">Complete Deep Dive</div>
+        <div class="subtitle">deductible_handler.py Explained</div>
+        <div class="version">
+            <p>Handler #4 - Complex Routing Handler</p>
+            <p>Six Checks, Four Routes</p>
+            <p>Technical Documentation v1.0</p>
+            <p>October 2025</p>
+        </div>
+    </div>
+    <div class="content">
+        <p><h1>Deductible Handler - Complete Deep Dive</h1></p>
+<p><h2>Comprehensive Explanation of <code>deductible_handler.py</code></h2></p>
+<p>---</p>
+<p><h2>Table of Contents</h2></p>
+<p><li>[Executive Summary](#executive-summary)</li>
+<li>[What is a Deductible?](#what-is-a-deductible)</li>
+<li>[Handler Overview](#handler-overview)</li>
+<li>[Complete Code Structure](#complete-code-structure)</li>
+<li>[Main Method: process()](#main-method-process)</li>
+<li>[Branch Setup Methods](#branch-setup-methods)</li>
+<li>[Routing Logic Deep Dive](#routing-logic-deep-dive)</li>
+<li>[Real-World Examples](#real-world-examples)</li>
+<li>[Integration with Handler Chain](#integration-with-handler-chain)</li>
+<li>[Complete Code Walkthrough](#complete-code-walkthrough)</li>
+<li>[Decision Tree and Flow](#decision-tree-and-flow)</li>
+<li>[Impact and Importance](#impact-and-importance)</li></p>
+<p>---</p>
+<p><h2>1. Executive Summary</h2></p>
+<p><h3>What Does This Handler Do?</h3></p>
+<p>The <strong>Deductible Handler</strong> is a <strong>COMPLEX ROUTING HANDLER</strong> that checks deductible status and routes to appropriate cost-sharing handlers.</p>
+<p><strong>Core Questions:</strong>
+<li>"Does the member have a deductible?"</li>
+<li>"Is the deductible met (family or individual)?"</li>
+<li>"Does deductible apply before or after copay?"</li></p>
+<p><h3>Position in Handler Chain</h3></p>
+<p><pre><code class="language-">ServiceCoverageHandler
+    ↓
+BenefitLimitationHandler
+    ↓
+OOPMaxHandler
+    ↓ (if OOPMax NOT met)
+DeductibleHandler ← YOU ARE HERE (Handler #4)
+    ↓
+    ├─ Route A: CostShareCoPayHandler (no deductible)
+    ├─ Route B: DeductibleCostShareCoPayHandler (deductible met)
+    ├─ Route C: DeductibleCoPayHandler (deductible after copay)
+    └─ Route D: DeductibleOOPMaxHandler (deductible before copay)</code></pre></p>
+<p><h3>Key Responsibilities</h3></p>
+<p><li><strong>Check</strong> if deductible accumulator exists</li>
+<li><strong>Check</strong> if family deductible is met (= 0)</li>
+<li><strong>Check</strong> if required individuals have met deductible</li>
+<li><strong>Check</strong> if individual deductible is met (= 0)</li>
+<li><strong>Check</strong> if deductible applies before or after copay</li>
+<li><strong>Route</strong> to appropriate handler based on these checks</li></p>
+<p><h3>Handler Characteristics</h3></p>
+<p><li><strong>File</strong>: <code>deductible_handler.py</code></li>
+<li><strong>Lines of Code</strong>: 59 (routing handler)</li>
+<li><strong>Type</strong>: Routing/Decision Handler (NOT calculation)</li>
+<li><strong>No Calculation</strong>: Doesn't modify context values</li>
+<li><strong>Purpose</strong>: Route based on deductible status</li>
+<li><strong>Main Method</strong>: <code>process(context)</code></li>
+<li><strong>Branch Methods</strong>: 4 setup methods</li></p>
+<p>---</p>
+<p><h2>2. What is a Deductible?</h2></p>
+<p><h3>Definition</h3></p>
+<p>A <strong>deductible</strong> is the amount a member must pay out-of-pocket for covered healthcare services before insurance begins to pay.</p>
+<p><h3>Key Concepts</h3></p>
+<p><strong>Individual Deductible:</strong>
+<pre><code class="language-">Annual Deductible: $2,000
+Member paid: $1,500
+Remaining: $500</p>
+<p>Today's service: $300
+Member pays: $300 (toward deductible)
+Insurance pays: $0</p>
+<p>After: Remaining deductible = $200</code></pre></p>
+<p><strong>Family Deductible:</strong>
+<pre><code class="language-">Family Deductible: $4,000
+Family paid: $3,000
+Remaining: $1,000</p>
+<p>Any family member's service: $500
+Member pays: $500 (toward family deductible)
+Insurance pays: $0</p>
+<p>After: Remaining family deductible = $500</code></pre></p>
+<p><h3>Deductible Met vs Not Met</h3></p>
+<p><strong>NOT Met:</strong>
+<pre><code class="language-">Deductible: $2,000
+Paid: $500
+Remaining: $1,500</p>
+<p>Service: $200
+Member pays: $200 (all goes to deductible)
+Insurance pays: $0</code></pre></p>
+<p><strong>MET (Deductible = 0):</strong>
+<pre><code class="language-">Deductible: $2,000
+Paid: $2,000
+Remaining: $0 (MET!)</p>
+<p>Service: $200
+Member pays: Copay or coinsurance (NOT full amount)
+Insurance pays: Majority</code></pre></p>
+<p><h3>Components That Count Toward Deductible</h3></p>
+<p><strong>Included:</strong>
+<pre><code class="language-">✓ Doctor visits
+✓ Lab tests
+✓ Procedures
+✓ Hospital services
+✓ (Some) prescription drugs</code></pre></p>
+<p><strong>NOT Included:</strong>
+<pre><code class="language-">✗ Premiums
+✗ Non-covered services
+✗ Copays (usually, unless copay_count_to_deductible = Yes)</code></pre></p>
+<p>---</p>
+<p><h2>3. Handler Overview</h2></p>
+<p><h3>Class Definition</h3></p>
+<p><pre><code class="language-python">class DeductibleHandler(Handler):
+    """Calculates member costs based on accumulated deductible"""</code></pre></p>
+<p><strong>Note:</strong> Docstring says "Calculates" but this is actually a <strong>ROUTING</strong> handler, not a calculation handler. It routes to handlers that calculate.</p>
+<p><h3>Handler Structure</h3></p>
+<p><pre><code class="language-python">class DeductibleHandler(Handler):
+    # Branch setup methods (4)
+    def set_deductible_oopmax_handler(handler)
+    def set_cost_share_co_pay_handler(handler)
+    def set_deductible_cost_share_co_pay_handler(handler)
+    def set_deductible_co_pay_handler(handler)
+    
+    # Main routing method
+    def process(context) -> InsuranceContext</code></pre></p>
+<p><h3>No Helper Methods</h3></p>
+<p>This handler:
+<li>✗ No <code>_apply_</code> methods</li>
+<li>✗ No calculations</li>
+<li>✓ Only routing logic</li>
+<li>✓ Checks multiple conditions</li></p>
+<p><h3>Handler Responsibilities</h3></p>
+<p><pre><code class="language-">┌──────────────────────────────────────────────────┐
+│ DeductibleHandler                                │
+├──────────────────────────────────────────────────┤
+│ 1. Check if "deductible" in accum_code          │
+│    NO → Route to CostShareCoPayHandler          │
+│ 2. Check if family deductible = 0               │
+│    YES → Route to DeductibleCostShareCoPayHandler│
+│ 3. Check if required individuals met deductible │
+│    YES → Route to DeductibleCostShareCoPayHandler│
+│ 4. Check if individual deductible = 0           │
+│    YES → Route to DeductibleCostShareCoPayHandler│
+│ 5. Check if deductible before or after copay    │
+│    - Before → Route to DeductibleOOPMaxHandler  │
+│    - After (with copay) → DeductibleCoPayHandler│
+│    - After (no copay) → DeductibleOOPMaxHandler │
+└──────────────────────────────────────────────────┘</code></pre></p>
+<p>---</p>
+<p><h2>4. Complete Code Structure</h2></p>
+<p><h3>Full Code (59 Lines)</h3></p>
+<p><pre><code class="language-python">from app.core.base import Handler, InsuranceContext</p>
+<p>class DeductibleHandler(Handler):
+    """Calculates member costs based on accumulated deductible"""</p>
+<p>    def set_deductible_oopmax_handler(self, handler):
+        self._deductible_oopmax_handler = handler
+        return handler</p>
+<p>    def set_cost_share_co_pay_handler(self, handler):
+        self._cost_share_co_pay_handler = handler
+        return handler</p>
+<p>    def set_deductible_cost_share_co_pay_handler(self, handler):
+        self._deductible_cost_share_co_pay_handler = handler
+        return handler</p>
+<p>    def set_deductible_co_pay_handler(self, handler):
+        self._deductible_co_pay_handler = handler
+        return handler</p>
+<p>    def process(self, context: InsuranceContext):
+        # Check if deductible accumulators exist - if not, go to cost share
+        if "deductible" not in context.accum_code:
+            context.trace_decision(
+                "Process",
+                "No deductible accumulators found - going to cost share copay handler",
+                True,
+            )
+            return self._cost_share_co_pay_handler.handle(context)</p>
+<p>        if context.deductible_family_calculated == 0:
+            context.trace_decision("Process", "The family deductible is zero", True)
+            return self._deductible_cost_share_co_pay_handler.handle(context)</p>
+<p>        if (
+            context.numOfIndividualsMet is not None
+            and context.numOfIndividualsNeededToMeet is not None
+            and context.numOfIndividualsMet == context.numOfIndividualsNeededToMeet
+        ):
+            context.trace_decision("Process", "The family deductible is zero", True)
+            return self._deductible_cost_share_co_pay_handler.handle(context)</p>
+<p>        if context.deductible_individual_calculated == 0:
+            context.trace_decision("Process", "The individual deductible is zero", True)
+            return self._deductible_cost_share_co_pay_handler.handle(context)</p>
+<p>        if not context.is_deductible_before_copay:
+            context.trace_decision("Process", "The deductible is after co-pay", False)
+            if context.cost_share_copay > 0:
+                return self._deductible_co_pay_handler.handle(context)
+            else:
+                return self._deductible_oopmax_handler.handle(context)</p>
+<p>        else:
+            context.trace_decision("Process", "The deductible is before co-pay", False)
+            return self._deductible_oopmax_handler.handle(context)</code></pre></p>
+<p><h3>Code Sections</h3></p>
+<p><strong>Lines 1-2: Imports</strong>
+<pre><code class="language-python">from app.core.base import Handler, InsuranceContext</code></pre></p>
+<p><strong>Lines 4-5: Class Definition</strong>
+<pre><code class="language-python">class DeductibleHandler(Handler):
+    """Calculates member costs based on accumulated deductible"""</code></pre></p>
+<p><strong>Lines 7-21: Branch Setup (4 methods)</strong>
+<pre><code class="language-python">def set_deductible_oopmax_handler(handler)
+def set_cost_share_co_pay_handler(handler)
+def set_deductible_cost_share_co_pay_handler(handler)
+def set_deductible_co_pay_handler(handler)</code></pre></p>
+<p><strong>Lines 23-59: Routing Logic</strong>
+<pre><code class="language-python">def process(context)
+    # 6 different routing decisions</code></pre></p>
+<p>---</p>
+<p><h2>5. Main Method: process()</h2></p>
+<p><h3>Method Signature (Line 23)</h3></p>
+<p><pre><code class="language-python">def process(self, context: InsuranceContext):</code></pre></p>
+<p><strong>Input:</strong> InsuranceContext with:
+<li><code>accum_code</code>: Set of accumulator codes</li>
+<li><code>deductible_family_calculated</code>: Remaining family deductible</li>
+<li><code>deductible_individual_calculated</code>: Remaining individual deductible</li>
+<li><code>numOfIndividualsMet</code>: Number who met deductible</li>
+<li><code>numOfIndividualsNeededToMeet</code>: Number needed to meet</li>
+<li><code>is_deductible_before_copay</code>: Boolean flag</li>
+<li><code>cost_share_copay</code>: Copay amount</li></p>
+<p><strong>Output:</strong> Returns result from delegated handler
+<li>Does NOT modify context itself</li>
+<li>Passes context to chosen handler</li></p>
+<p><h3>Processing Flow (Six Checks)</h3></p>
+<p><pre><code class="language-">1. Check if deductible exists
+   NO → Route to CostShareCoPayHandler
+   YES → Continue</p>
+<p><li>Check if family deductible met (= 0)</li>
+   YES → Route to DeductibleCostShareCoPayHandler
+   NO → Continue</p>
+<p><li>Check if required individuals met</li>
+   YES → Route to DeductibleCostShareCoPayHandler
+   NO → Continue</p>
+<p><li>Check if individual deductible met (= 0)</li>
+   YES → Route to DeductibleCostShareCoPayHandler
+   NO → Continue</p>
+<p><li>Check if deductible before copay</li>
+   NO → Check if has copay
+     YES → Route to DeductibleCoPayHandler
+     NO → Route to DeductibleOOPMaxHandler
+   YES → Route to DeductibleOOPMaxHandler</code></pre></p>
+<p><h3>Step-by-Step Breakdown</h3></p>
+<p><h4><strong>Step 1: Check if Deductible Exists (Lines 24-31)</strong></h4></p>
+<p><pre><code class="language-python"><h1>Check if deductible accumulators exist - if not, go to cost share</h1>
+if "deductible" not in context.accum_code:
+    context.trace_decision(
+        "Process",
+        "No deductible accumulators found - going to cost share copay handler",
+        True,
+    )
+    return self._cost_share_co_pay_handler.handle(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Is "deductible" in the set of accumulator codes?</li>
+<li>If NO → Plan doesn't have deductible</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>No deductible</h1>
+context.accum_code = {"oopmax"}
+Result: Route to CostShareCoPayHandler</p>
+<p><h1>Has deductible</h1>
+context.accum_code = {"deductible", "oopmax"}
+Result: Continue checking</code></pre></p>
+<p><strong>Why Route to CostShareCoPayHandler?</strong>
+<li>No deductible means member goes straight to copay/coinsurance</li>
+<li>Skip all deductible processing</li>
+<li>Standard cost-sharing applies</li></p>
+<p><h4><strong>Step 2: Check if Family Deductible Met (Lines 33-35)</strong></h4></p>
+<p><pre><code class="language-python">if context.deductible_family_calculated == 0:
+    context.trace_decision("Process", "The family deductible is zero", True)
+    return self._deductible_cost_share_co_pay_handler.handle(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Is remaining family deductible = 0?</li>
+<li>If YES → Family has met their deductible</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">context.deductible_family_calculated = 0  # MET</p>
+<p>Result: Route to DeductibleCostShareCoPayHandler
+Meaning: Apply copay/coinsurance (not deductible)</code></pre></p>
+<p><strong>Why This Route?</strong>
+<li>Family deductible met = switch to copay/coinsurance</li>
+<li>DeductibleCostShareCoPayHandler determines which applies</li></p>
+<p><h4><strong>Step 3: Check if Required Individuals Met (Lines 37-43)</strong></h4></p>
+<p><pre><code class="language-python">if (
+    context.numOfIndividualsMet is not None
+    and context.numOfIndividualsNeededToMeet is not None
+    and context.numOfIndividualsMet == context.numOfIndividualsNeededToMeet
+):
+    context.trace_decision("Process", "The family deductible is zero", True)
+    return self._deductible_cost_share_co_pay_handler.handle(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Three conditions (ALL must be True):</li>
+  1. numOfIndividualsMet is not None
+  2. numOfIndividualsNeededToMeet is not None
+  3. numOfIndividualsMet == numOfIndividualsNeededToMeet</p>
+<p><strong>This is for special family plans:</strong>
+<li>Example: "2 out of 4 family members must meet individual deductible"</li>
+<li>If 2 members have met → family deductible considered met</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">context.numOfIndividualsMet = 2
+context.numOfIndividualsNeededToMeet = 2</p>
+<p>2 == 2? YES
+Result: Route to DeductibleCostShareCoPayHandler</code></pre></p>
+<p><strong>Why This Matters:</strong>
+<li>Some plans have embedded individual deductibles</li>
+<li>When enough individuals meet, family deductible is met</li>
+<li>Switch to copay/coinsurance</li></p>
+<p><h4><strong>Step 4: Check if Individual Deductible Met (Lines 45-47)</strong></h4></p>
+<p><pre><code class="language-python">if context.deductible_individual_calculated == 0:
+    context.trace_decision("Process", "The individual deductible is zero", True)
+    return self._deductible_cost_share_co_pay_handler.handle(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Is remaining individual deductible = 0?</li>
+<li>If YES → Member has met their deductible</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">context.deductible_individual_calculated = 0  # MET</p>
+<p>Result: Route to DeductibleCostShareCoPayHandler
+Meaning: Apply copay/coinsurance (not deductible)</code></pre></p>
+<p><strong>Why This Route?</strong>
+<li>Individual deductible met = switch to copay/coinsurance</li>
+<li>DeductibleCostShareCoPayHandler determines which applies</li></p>
+<p><h4><strong>Step 5: Check if Deductible Before or After Copay (Lines 49-54)</strong></h4></p>
+<p><pre><code class="language-python">if not context.is_deductible_before_copay:
+    context.trace_decision("Process", "The deductible is after co-pay", False)
+    if context.cost_share_copay > 0:
+        return self._deductible_co_pay_handler.handle(context)
+    else:
+        return self._deductible_oopmax_handler.handle(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Does deductible apply AFTER copay?</li>
+<li>If YES (is_deductible_before_copay = False):</li>
+  - Check if copay exists
+  - YES → Route to DeductibleCoPayHandler
+  - NO → Route to DeductibleOOPMaxHandler</p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Deductible AFTER copay (with copay)</h1>
+context.is_deductible_before_copay = False
+context.cost_share_copay = 30.00</p>
+<p>Result: Route to DeductibleCoPayHandler
+Flow: Apply copay first, then deductible</code></pre></p>
+<p><strong>Why This Matters:</strong>
+<li>Order of application: copay first, then deductible</li>
+<li>Member pays copay, remaining goes to deductible</li></p>
+<p><h4><strong>Step 6: Deductible Before Copay (Lines 56-58)</strong></h4></p>
+<p><pre><code class="language-python">else:
+    context.trace_decision("Process", "The deductible is before co-pay", False)
+    return self._deductible_oopmax_handler.handle(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Deductible applies BEFORE copay (standard)</li>
+<li>is_deductible_before_copay = True</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">context.is_deductible_before_copay = True</p>
+<p>Result: Route to DeductibleOOPMaxHandler
+Flow: Apply deductible first, then copay/coinsurance</code></pre></p>
+<p><strong>Why This Route?</strong>
+<li>Standard deductible processing</li>
+<li>Full service amount goes to deductible</li>
+<li>After deductible met, copay/coinsurance applies</li></p>
+<p>---</p>
+<p><h2>6. Branch Setup Methods</h2></p>
+<p><h3>Method 1: set_deductible_oopmax_handler() (Lines 7-9)</h3></p>
+<p><pre><code class="language-python">def set_deductible_oopmax_handler(self, handler):
+    self._deductible_oopmax_handler = handler
+    return handler</code></pre></p>
+<p><strong>Purpose:</strong> Store reference to DeductibleOOPMaxHandler</p>
+<p><strong>When Used:</strong>
+<li>Deductible NOT met</li>
+<li>Deductible applies before copay (standard)</li></p>
+<p>---</p>
+<p><h3>Method 2: set_cost_share_co_pay_handler() (Lines 11-13)</h3></p>
+<p><pre><code class="language-python">def set_cost_share_co_pay_handler(self, handler):
+    self._cost_share_co_pay_handler = handler
+    return handler</code></pre></p>
+<p><strong>Purpose:</strong> Store reference to CostShareCoPayHandler</p>
+<p><strong>When Used:</strong>
+<li>No deductible in plan</li>
+<li>Skip all deductible processing</li></p>
+<p>---</p>
+<p><h3>Method 3: set_deductible_cost_share_co_pay_handler() (Lines 15-17)</h3></p>
+<p><pre><code class="language-python">def set_deductible_cost_share_co_pay_handler(self, handler):
+    self._deductible_cost_share_co_pay_handler = handler
+    return handler</code></pre></p>
+<p><strong>Purpose:</strong> Store reference to DeductibleCostShareCoPayHandler</p>
+<p><strong>When Used:</strong>
+<li>Family deductible met (= 0)</li>
+<li>Required individuals met deductible</li>
+<li>Individual deductible met (= 0)</li></p>
+<p>---</p>
+<p><h3>Method 4: set_deductible_co_pay_handler() (Lines 19-21)</h3></p>
+<p><pre><code class="language-python">def set_deductible_co_pay_handler(self, handler):
+    self._deductible_co_pay_handler = handler
+    return handler</code></pre></p>
+<p><strong>Purpose:</strong> Store reference to DeductibleCoPayHandler</p>
+<p><strong>When Used:</strong>
+<li>Deductible NOT met</li>
+<li>Deductible applies after copay</li>
+<li>Has copay amount</li></p>
+<p>---</p>
+<p><h2>7. Routing Logic Deep Dive</h2></p>
+<p><h3>Four Possible Routes</h3></p>
+<p><strong>Route 1: CostShareCoPayHandler</strong>
+<pre><code class="language-">Condition: No deductible in plan</p>
+<p>Why: No deductible to process
+Result: Apply copay or coinsurance directly</code></pre></p>
+<p><strong>Route 2: DeductibleCostShareCoPayHandler</strong>
+<pre><code class="language-">Conditions:
+  - Family deductible = 0 OR
+  - Required individuals met OR
+  - Individual deductible = 0</p>
+<p>Why: Deductible is met
+Result: Determine copay vs coinsurance</code></pre></p>
+<p><strong>Route 3: DeductibleCoPayHandler</strong>
+<pre><code class="language-">Conditions:
+  - Deductible NOT met AND
+  - Deductible after copay AND
+  - Has copay amount</p>
+<p>Why: Apply copay first, then deductible
+Result: Process copay before deductible</code></pre></p>
+<p><strong>Route 4: DeductibleOOPMaxHandler</strong>
+<pre><code class="language-">Conditions:
+  - Deductible NOT met AND
+  - (Deductible before copay OR no copay)</p>
+<p>Why: Standard deductible processing
+Result: Apply service to deductible</code></pre></p>
+<p>---</p>
+<p><h2>8. Real-World Examples</h2></p>
+<p><h3>Example 1: No Deductible Plan</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: None
+Copay: $30 per visit</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"oopmax"}  # No "deductible"</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: Check if deductible exists</h1>
+"deductible" in accum_code? NO</p>
+<p>Route: CostShareCoPayHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Skip all deductible processing
+Apply $30 copay directly</code></pre></p>
+<p>---</p>
+<p><h3>Example 2: Individual Deductible Met</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Individual Deductible: $2,000
+Member paid: $2,000 (MET)
+Today: $200 doctor visit</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"deductible"}
+context.deductible_individual_calculated = 0  # MET</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: Has deductible? YES</h1>
+<h1>Step 2: Family deductible = 0? NO (skip)</h1>
+<h1>Step 3: Required individuals met? NO (skip)</h1>
+<h1>Step 4: Individual deductible = 0? YES</h1></p>
+<p>Route: DeductibleCostShareCoPayHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Deductible met
+Apply copay or coinsurance (not deductible)</code></pre></p>
+<p>---</p>
+<p><h3>Example 3: Family Deductible Met</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Family Deductible: $4,000
+Family paid: $4,000 (MET)
+Today: $500 service for one member</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"deductible"}
+context.deductible_family_calculated = 0  # MET
+context.deductible_individual_calculated = 1500  # Individual NOT met</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: Has deductible? YES</h1>
+<h1>Step 2: Family deductible = 0? YES</h1></p>
+<p>Route: DeductibleCostShareCoPayHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Family deductible met (even though individual not met)
+Apply copay or coinsurance</code></pre></p>
+<p>---</p>
+<p><h3>Example 4: Deductible NOT Met, Before Copay</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Individual Deductible: $2,000
+Paid so far: $500
+Remaining: $1,500
+Deductible applies: Before copay</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"deductible"}
+context.deductible_individual_calculated = 1500.00  # NOT met
+context.is_deductible_before_copay = True</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Steps 1-4: NOT met</h1>
+<h1>Step 5: is_deductible_before_copay? TRUE</h1></p>
+<p>Route: DeductibleOOPMaxHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Apply service amount to deductible
+Standard deductible processing</code></pre></p>
+<p>---</p>
+<p><h3>Example 5: Deductible After Copay</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Individual Deductible: $2,000
+Remaining: $1,500
+Deductible applies: AFTER copay
+Copay: $30</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"deductible"}
+context.deductible_individual_calculated = 1500.00  # NOT met
+context.is_deductible_before_copay = False
+context.cost_share_copay = 30.00</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Steps 1-4: NOT met</h1>
+<h1>Step 5: is_deductible_before_copay? FALSE</h1>
+<h1>Has copay? YES (30.00)</h1></p>
+<p>Route: DeductibleCoPayHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Apply copay first ($30)
+Then apply remaining to deductible</code></pre></p>
+<p>---</p>
+<p><h3>Example 6: Required Individuals Met</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Family Deductible: $4,000
+Rule: 2 out of 4 members must meet individual deductible
+Individual Deductible: $1,000 each</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.numOfIndividualsMet = 2
+context.numOfIndividualsNeededToMeet = 2</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: Has deductible? YES</h1>
+<h1>Step 2: Family = 0? NO</h1>
+<h1>Step 3: Required individuals met? YES (2 == 2)</h1></p>
+<p>Route: DeductibleCostShareCoPayHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Family deductible considered met
+Apply copay/coinsurance</code></pre></p>
+<p>---</p>
+<p><h2>9. Integration with Handler Chain</h2></p>
+<p><h3>Handler Chain Setup</h3></p>
+<p><strong>From calculation_service_impl.py:</strong></p>
+<p><pre><code class="language-python"><h1>Create handlers</h1>
+deductible_handler = DeductibleHandler()
+deductible_oopmax_handler = DeductibleOOPMaxHandler()
+cost_share_co_pay_handler = CostShareCoPayHandler()
+deductible_cost_share_co_pay_handler = DeductibleCostShareCoPayHandler()
+deductible_co_pay_handler = DeductibleCoPayHandler()</p>
+<p><h1>Setup routing</h1>
+deductible_handler.set_deductible_oopmax_handler(deductible_oopmax_handler)
+deductible_handler.set_cost_share_co_pay_handler(cost_share_co_pay_handler)
+deductible_handler.set_deductible_cost_share_co_pay_handler(
+    deductible_cost_share_co_pay_handler
+)
+deductible_handler.set_deductible_co_pay_handler(deductible_co_pay_handler)</code></pre></p>
+<p><h3>Position in Chain</h3></p>
+<p><pre><code class="language-">1. ServiceCoverageHandler
+<li>BenefitLimitationHandler</li>
+<li>OOPMaxHandler</li>
+<li>DeductibleHandler ← YOU ARE HERE</li>
+   ↓
+   ├─ Route A: CostShareCoPayHandler
+   ├─ Route B: DeductibleCostShareCoPayHandler
+   ├─ Route C: DeductibleCoPayHandler
+   └─ Route D: DeductibleOOPMaxHandler</code></pre></p>
+<p><h3>Routing Visualization</h3></p>
+<p><pre><code class="language-">            DeductibleHandler
+                  ↓
+          ┌───────────────┐
+          │ Has           │
+          │ deductible?   │
+          └───────┬───────┘
+                  │
+          ┌───────┴────────┐
+          │                │
+         NO               YES
+          │                │
+          ↓                ↓
+  [CostShareCoPay]  ┌─────────────┐
+                    │ Family = 0? │
+                    └──────┬──────┘
+                           │
+                    ┌──────┴──────┐
+                    │             │
+                   YES           NO
+                    │             │
+                    ↓             ↓
+            [DeductibleCost]  ┌───────────┐
+            [ShareCoPay]      │Individual │
+                             │= 0?       │
+                             └─────┬─────┘
+                                   │
+                            ┌──────┴──────┐
+                            │             │
+                           YES           NO
+                            │             │
+                            ↓             ↓
+                    [DeductibleCost]  ┌──────────────┐
+                    [ShareCoPay]      │is_deductible_│
+                                     │before_copay? │
+                                     └──────┬───────┘
+                                            │
+                                     ┌──────┴──────┐
+                                     │             │
+                                   FALSE          TRUE
+                                     │             │
+                                     ↓             ↓
+                             ┌──────────┐    [DeductibleOOPMax]
+                             │Has copay?│
+                             └────┬─────┘
+                                  │
+                           ┌──────┴──────┐
+                           │             │
+                          YES           NO
+                           │             │
+                           ↓             ↓
+                   [DeductibleCoPay]  [DeductibleOOPMax]</code></pre></p>
+<p>---</p>
+<p><h2>10. Complete Code Walkthrough</h2></p>
+<p><h3>Line-by-Line Explanation</h3></p>
+<p><pre><code class="language-python"><h1>LINE 1: Import base classes</h1>
+from app.core.base import Handler, InsuranceContext</p>
+<p><h1>LINE 4: Define Deductible handler class</h1>
+class DeductibleHandler(Handler):
+    # Inherits from Handler
+    # Routes based on deductible status
+    
+    
+    # LINE 5: Docstring
+    """Calculates member costs based on accumulated deductible"""
+    # Note: Actually a routing handler, not calculation
+    
+    
+    # LINE 7-9: Setup DeductibleOOPMax handler reference
+    def set_deductible_oopmax_handler(self, handler):
+        # Store reference to DeductibleOOPMaxHandler
+        self._deductible_oopmax_handler = handler
+        return handler  # Allow chaining
+        # Used when deductible NOT met, applies before copay
+    
+    
+    # LINE 11-13: Setup CostShareCoPay handler reference
+    def set_cost_share_co_pay_handler(self, handler):
+        # Store reference to CostShareCoPayHandler
+        self._cost_share_co_pay_handler = handler
+        return handler
+        # Used when NO deductible in plan
+    
+    
+    # LINE 15-17: Setup DeductibleCostShareCoPay handler reference
+    def set_deductible_cost_share_co_pay_handler(self, handler):
+        # Store reference to DeductibleCostShareCoPayHandler
+        self._deductible_cost_share_co_pay_handler = handler
+        return handler
+        # Used when deductible is MET
+    
+    
+    # LINE 19-21: Setup DeductibleCoPay handler reference
+    def set_deductible_co_pay_handler(self, handler):
+        # Store reference to DeductibleCoPayHandler
+        self._deductible_co_pay_handler = handler
+        return handler
+        # Used when deductible NOT met, applies after copay
+    
+    
+    # LINE 23: Main routing method
+    def process(self, context: InsuranceContext):
+        # Input: InsuranceContext with deductible data
+        # Output: Result from delegated handler
+        
+        
+        # LINE 24-31: Check if deductible exists
+        # Comment: Check if deductible accumulators exist - if not, go to cost share
+        if "deductible" not in context.accum_code:
+            # No deductible accumulator present
+            
+            # Add trace entry
+            context.trace_decision(
+                "Process",
+                "No deductible accumulators found - going to cost share copay handler",
+                True,
+            )
+            
+            # Route to cost share copay handler (skip deductible)
+            return self._cost_share_co_pay_handler.handle(context)
+            # Returns result from CostShareCoPayHandler
+        
+        
+        # LINE 33-35: Check if family deductible met
+        if context.deductible_family_calculated == 0:
+            # Family deductible is 0 (MET)
+            
+            # Add trace entry
+            context.trace_decision("Process", "The family deductible is zero", True)
+            
+            # Route to deductible cost share copay handler
+            return self._deductible_cost_share_co_pay_handler.handle(context)
+            # Returns result from DeductibleCostShareCoPayHandler
+            # This handler determines copay vs coinsurance
+        
+        
+        # LINE 37-43: Check if required individuals met
+        if (
+            # Condition 1: numOfIndividualsMet is not None
+            context.numOfIndividualsMet is not None
+            # Condition 2: numOfIndividualsNeededToMeet is not None
+            and context.numOfIndividualsNeededToMeet is not None
+            # Condition 3: Met == Needed
+            and context.numOfIndividualsMet == context.numOfIndividualsNeededToMeet
+        ):
+            # All conditions TRUE → Required individuals have met deductible
+            
+            # Add trace entry (same as family deductible)
+            context.trace_decision("Process", "The family deductible is zero", True)
+            
+            # Route to deductible cost share copay handler
+            return self._deductible_cost_share_co_pay_handler.handle(context)
+            # Treats as family deductible met
+        
+        
+        # LINE 45-47: Check if individual deductible met
+        if context.deductible_individual_calculated == 0:
+            # Individual deductible is 0 (MET)
+            
+            # Add trace entry
+            context.trace_decision("Process", "The individual deductible is zero", True)
+            
+            # Route to deductible cost share copay handler
+            return self._deductible_cost_share_co_pay_handler.handle(context)
+            # This handler determines copay vs coinsurance
+        
+        
+        # LINE 49-54: Deductible NOT met, check order
+        if not context.is_deductible_before_copay:
+            # Deductible applies AFTER copay
+            
+            # Add trace entry
+            context.trace_decision("Process", "The deductible is after co-pay", False)
+            
+            # Check if copay exists
+            if context.cost_share_copay > 0:
+                # Has copay → Apply copay first, then deductible
+                return self._deductible_co_pay_handler.handle(context)
+            else:
+                # No copay → Route to standard deductible handler
+                return self._deductible_oopmax_handler.handle(context)
+        
+        
+        # LINE 56-58: Deductible before copay (standard)
+        else:
+            # Deductible applies BEFORE copay
+            
+            # Add trace entry
+            context.trace_decision("Process", "The deductible is before co-pay", False)
+            
+            # Route to deductible OOPMax handler
+            return self._deductible_oopmax_handler.handle(context)
+            # Standard deductible processing
+            # Full service amount goes to deductible</code></pre></p>
+<p>---</p>
+<p><h2>11. Decision Tree and Flow</h2></p>
+<p><h3>Complete Decision Tree</h3></p>
+<p><pre><code class="language-">┌──────────────────────────────────────────────┐
+│ START: DeductibleHandler                     │
+└──────────────────┬───────────────────────────┘
+                   ↓
+            ┌──────────────┐
+            │ "deductible" │
+            │ in accum_code?│
+            └──────┬────────┘
+                   │
+            ┌──────┴──────┐
+            │             │
+           NO            YES
+            │             │
+            ↓             ↓
+    [CostShareCoPay]  ┌──────────────────┐
+                      │ deductible_family│
+                      │ _calculated = 0? │
+                      └──────┬───────────┘
+                             │
+                      ┌──────┴──────┐
+                      │             │
+                     YES           NO
+                      │             │
+                      ↓             ↓
+              [DeductibleCost]  ┌────────────────┐
+              [ShareCoPay]      │numOfIndividuals│
+                               │Met ==          │
+                               │NeededToMeet?   │
+                               └──────┬─────────┘
+                                      │
+                               ┌──────┴──────┐
+                               │             │
+                              YES           NO
+                               │             │
+                               ↓             ↓
+                       [DeductibleCost]  ┌──────────────────┐
+                       [ShareCoPay]      │deductible_       │
+                                        │individual        │
+                                        │_calculated = 0?  │
+                                        └──────┬───────────┘
+                                               │
+                                        ┌──────┴──────┐
+                                        │             │
+                                       YES           NO
+                                        │             │
+                                        ↓             ↓
+                                [DeductibleCost]  ┌─────────────────┐
+                                [ShareCoPay]      │is_deductible_   │
+                                                 │before_copay?    │
+                                                 └──────┬──────────┘
+                                                        │
+                                                 ┌──────┴──────┐
+                                                 │             │
+                                               FALSE          TRUE
+                                                 │             │
+                                                 ↓             ↓
+                                         ┌──────────┐    [DeductibleOOPMax]
+                                         │Has copay?│
+                                         └────┬─────┘
+                                              │
+                                       ┌──────┴──────┐
+                                       │             │
+                                      YES           NO
+                                       │             │
+                                       ↓             ↓
+                               [DeductibleCoPay] [DeductibleOOPMax]</code></pre></p>
+<p>---</p>
+<p><h2>12. Impact and Importance</h2></p>
+<p><h3>Why This Handler Matters</h3></p>
+<p><strong>Correct Routing:</strong>
+<pre><code class="language-">✓ Routes to correct handler based on deductible status
+✓ Handles met vs not met scenarios
+✓ Supports complex family deductible rules
+✓ Handles deductible order (before/after copay)</code></pre></p>
+<p><strong>Member Experience:</strong>
+<pre><code class="language-">✓ Clear: Different paths for met vs not met
+✓ Accurate: Correct cost calculations
+✓ Flexible: Supports various plan types</code></pre></p>
+<p><strong>Plan Flexibility:</strong>
+<pre><code class="language-">✓ No deductible plans
+✓ Individual deductible
+✓ Family deductible
+✓ Embedded individual in family
+✓ Deductible before copay
+✓ Deductible after copay</code></pre></p>
+<p><h3>Real-World Impact</h3></p>
+<p><strong>Scenario: Deductible Met Midyear</strong></p>
+<p><pre><code class="language-">January-March: Deductible NOT met
+  Member pays: Full service amounts
+  Route: DeductibleOOPMaxHandler
+  
+April: Deductible MET!
+  deductible_individual_calculated = 0
+  
+April-December: Deductible met
+  Member pays: Copay or coinsurance (much less)
+  Route: DeductibleCostShareCoPayHandler
+  
+Annual savings: Thousands of dollars</code></pre></p>
+<p><h3>Edge Case Handling</h3></p>
+<p><strong>Complex Family Rule:</strong>
+<pre><code class="language-">Plan: 2 out of 4 must meet $1,000 individual
+Family deductible: $4,000</p>
+<p>Scenario:
+  Member A: Met $1,000
+  Member B: Met $1,000
+  Members C & D: $0
+  
+Family total: $2,000 (not $4,000)
+But 2 individuals met!</p>
+<p>Handler: Routes to DeductibleCostShareCoPayHandler
+Result: Family deductible considered met ✓</code></pre></p>
+<p>---</p>
+<p><h2>Summary</h2></p>
+<p><h3>What We Learned</h3></p>
+<p><li><strong>DeductibleHandler</strong> is a complex routing handler (not calculation)</li></p>
+<p><li><strong>Six Routing Decisions:</strong></li>
+   - No deductible → CostShareCoPayHandler
+   - Family deductible met → DeductibleCostShareCoPayHandler
+   - Required individuals met → DeductibleCostShareCoPayHandler
+   - Individual deductible met → DeductibleCostShareCoPayHandler
+   - Deductible after copay (with copay) → DeductibleCoPayHandler
+   - Deductible before copay (or no copay) → DeductibleOOPMaxHandler</p>
+<p><li><strong>Four Possible Routes:</strong></li>
+   - CostShareCoPayHandler (no deductible)
+   - DeductibleCostShareCoPayHandler (deductible met)
+   - DeductibleCoPayHandler (deductible after copay)
+   - DeductibleOOPMaxHandler (standard deductible)</p>
+<p><li><strong>Key Flags:</strong></li>
+   - <code>accum_code</code>: Set of accumulators
+   - <code>deductible_family_calculated</code>: Remaining family deductible
+   - <code>deductible_individual_calculated</code>: Remaining individual deductible
+   - <code>numOfIndividualsMet / NeededToMeet</code>: For embedded deductibles
+   - <code>is_deductible_before_copay</code>: Order of application</p>
+<p><li><strong>Complex Logic:</strong></li>
+   - Handles family vs individual
+   - Handles embedded individual deductibles
+   - Handles deductible order</p>
+<p><h3>Key Takeaways</h3></p>
+<p>✓ <strong>Routing Handler</strong>: Doesn't calculate, only routes
+✓ <strong>Six Checks</strong>: Multiple conditions evaluated
+✓ <strong>Four Routes</strong>: Different handlers for different scenarios
+✓ <strong>Complex Logic</strong>: Supports various plan types
+✓ <strong>Defensive</strong>: Handles edge cases gracefully</p>
+<p><h3>Real-World Value</h3></p>
+<p><strong>Ensures:</strong>
+<li>Correct routing based on deductible status</li>
+<li>Proper handling of met vs not met</li>
+<li>Support for complex family rules</li>
+<li>Correct order of application</li></p>
+<p><strong>Prevents:</strong>
+<li>Applying deductible when met</li>
+<li>Missing deductible when not met</li>
+<li>Incorrect routing</li>
+<li>Member confusion</li></p>
+<p>---</p>
+<p><strong>End of Deductible Handler Deep Dive</strong>
+</p>
+    </div>
+    <div class="footer">
+        <p><strong>Deductible Handler - Technical Documentation</strong></p>
+        <p>© 2025 | Complete Deep Dive of deductible_handler.py</p>
+    </div>
+</body>
+</html>
