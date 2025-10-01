@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Deductible CoInsurance Handler Deep Dive</title>
+    <style>
+        @page {
+            margin: 0.75in;
+        }
+        @media print {
+            body { font-size: 10pt; }
+            h1 { page-break-before: always; margin-top: 0; }
+            h1:first-of-type { page-break-before: auto; }
+            h2 { page-break-before: always; margin-top: 0; }
+            h2:first-of-type { page-break-before: auto; }
+            pre, table { page-break-inside: avoid; }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            line-height: 1.7;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #2c3e50;
+        }
+        .cover {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            margin: -40px -20px 60px -20px;
+            padding: 100px 20px;
+            page-break-after: always;
+        }
+        .cover h1 {
+            font-size: 3.5em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .cover .subtitle {
+            font-size: 1.8em;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #4facfe;
+            padding-bottom: 15px;
+            margin-top: 60px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 12px;
+            margin-top: 50px;
+            font-size: 2em;
+        }
+        h3 {
+            color: #4facfe;
+            margin-top: 35px;
+            font-size: 1.5em;
+        }
+        h4 {
+            color: #00f2fe;
+            margin-top: 25px;
+            font-size: 1.2em;
+        }
+        code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: Monaco, 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        pre code {
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 25px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 14px;
+            text-align: left;
+        }
+        th {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        li {
+            margin: 10px 0;
+        }
+        .footer {
+            margin-top: 80px;
+            padding-top: 30px;
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <h1>Deductible CoInsurance Handler</h1>
+        <div class="subtitle">Complete Deep Dive</div>
+        <div class="subtitle">deductible_co_insurance_handler.py</div>
+        <div class="version">
+            <p>Terminal Handler - Applies CoInsurance (Last Stop!)</p>
+            <p>Technical Documentation v1.0</p>
+            <p>October 2025</p>
+        </div>
+    </div>
+    <div class="content">
+        <p><h1>Deductible CoInsurance Handler - Complete Deep Dive</h1></p>
+<p><h2>Comprehensive Explanation of <code>deductible_co_insurance_handler.py</code></h2></p>
+<p>---</p>
+<p><h2>Table of Contents</h2></p>
+<p><li>[Executive Summary](#executive-summary)</li>
+<li>[What is This Handler?](#what-is-this-handler)</li>
+<li>[Handler Overview](#handler-overview)</li>
+<li>[Complete Code Structure](#complete-code-structure)</li>
+<li>[Main Method: process()](#main-method-process)</li>
+<li>[Helper Methods Explained](#helper-methods-explained)</li>
+<li>[Key Concept: CoInsurance vs Copay](#key-concept-coinsurance-vs-copay)</li>
+<li>[Real-World Examples](#real-world-examples)</li>
+<li>[Integration with Handler Chain](#integration-with-handler-chain)</li>
+<li>[Complete Code Walkthrough](#complete-code-walkthrough)</li>
+<li>[Decision Tree and Flow](#decision-tree-and-flow)</li>
+<li>[Terminal Handler Characteristics](#terminal-handler-characteristics)</li></p>
+<p>---</p>
+<p><h2>1. Executive Summary</h2></p>
+<p><h3>What Does This Handler Do?</h3></p>
+<p>The <strong>Deductible CoInsurance Handler</strong> is a <strong>TERMINAL CALCULATION HANDLER</strong> that applies coinsurance (percentage-based cost sharing) and marks the calculation as complete. This is typically the last handler in the chain.</p>
+<p><strong>Core Questions:</strong>
+<li>"What percentage does the member pay?"</li>
+<li>"Does coinsurance count toward OOPMax?"</li>
+<li>"Is OOPMax already met?"</li>
+<li>"How much does the member owe?"</li></p>
+<p><h3>Position in Handler Chain</h3></p>
+<p><pre><code class="language-">ServiceCoverageHandler
+    ↓
+BenefitLimitationHandler
+    ↓
+OOPMaxHandler
+    ↓
+DeductibleHandler
+    ↓
+[Various copay/deductible handlers]
+    ↓
+DeductibleCoInsuranceHandler ← YOU ARE HERE (LAST STOP!)
+    ↓
+COMPLETE ✓</code></pre></p>
+<p><h3>Key Responsibilities</h3></p>
+<p><li><strong>Check</strong> if coinsurance exists (> 0)</li>
+<li><strong>Check</strong> if coinsurance applies to OOPMax</li>
+<li><strong>Check</strong> if OOPMax is already met</li>
+<li><strong>Calculate</strong> coinsurance amount (percentage of service)</li>
+<li><strong>Apply</strong> member payment</li>
+<li><strong>Update</strong> OOPMax (if applicable)</li>
+<li><strong>Mark</strong> calculation complete (ALWAYS)</li></p>
+<p><h3>Handler Characteristics</h3></p>
+<p><li><strong>File</strong>: <code>deductible_co_insurance_handler.py</code></li>
+<li><strong>Lines of Code</strong>: 188 (calculation handler)</li>
+<li><strong>Type</strong>: Terminal Calculation Handler</li>
+<li><strong>Modifies Context</strong>: YES (member_pays, OOPMax, coinsurance)</li>
+<li><strong>Purpose</strong>: Apply coinsurance (final cost sharing)</li>
+<li><strong>Main Method</strong>: <code>process(context)</code></li>
+<li><strong>Helper Methods</strong>: 5 calculation methods</li>
+<li><strong>Next Handler</strong>: NONE (calculation always completes here)</li></p>
+<p>---</p>
+<p><h2>2. What is This Handler?</h2></p>
+<p><h3>Definition</h3></p>
+<p>This is a <strong>TERMINAL CALCULATION HANDLER</strong> that applies coinsurance (percentage-based cost sharing). It is typically the LAST handler in the chain and ALWAYS marks <code>calculation_complete = True</code>.</p>
+<p><h3>The Core Concept</h3></p>
+<p><strong>What is CoInsurance?</strong></p>
+<p><pre><code class="language-">CoInsurance: Percentage of cost member pays
+Copay: Fixed amount member pays</p>
+<p>Example:
+  Service: $1,000
+  CoInsurance: 20%
+  
+  Member pays: $200 (20% of $1,000)
+  Insurance pays: $800 (80%)</code></pre></p>
+<p><h3>Why This Matters</h3></p>
+<p><strong>Scenario A: Standard Coinsurance</strong>
+<pre><code class="language-">Service: $1,000 surgery
+Coinsurance: 20%
+OOPMax: $5,000 remaining</p>
+<p>Member pays: $200 (20%)
+OOPMax: $4,800 remaining
+Insurance pays: $800
+Calculation: COMPLETE</code></pre></p>
+<p><strong>Scenario B: Coinsurance Does NOT Count Toward OOPMax (Rare)</strong>
+<pre><code class="language-">Service: $1,000 surgery
+Coinsurance: 20%
+OOPMax: $5,000 remaining
+coins_applies_oop = False</p>
+<p>Member pays: $200 (20%)
+OOPMax: $5,000 (UNCHANGED!)
+Insurance pays: $800
+Calculation: COMPLETE</code></pre></p>
+<p><strong>Scenario C: OOPMax Already Met</strong>
+<pre><code class="language-">Service: $1,000 surgery
+Coinsurance: 20%
+OOPMax: $0 (already met)</p>
+<p>Member pays: $0
+Insurance pays: $1,000 (100%)
+Calculation: COMPLETE</code></pre></p>
+<p><strong>Scenario D: No Coinsurance</strong>
+<pre><code class="language-">Service: $1,000 surgery
+Coinsurance: 0%</p>
+<p>Member pays: $0
+Insurance pays: $1,000 (100%)
+Calculation: COMPLETE</code></pre></p>
+<p>---</p>
+<p><h2>3. Handler Overview</h2></p>
+<p><h3>Class Definition</h3></p>
+<p><pre><code class="language-python">class DeductibleCoInsuranceHandler(Handler):
+    """Determines any member co-insurance"""</code></pre></p>
+<p><strong>Key Word: "Determines"</strong> - This handler decides the final coinsurance payment.</p>
+<p><h3>Handler Structure</h3></p>
+<p><pre><code class="language-python">class DeductibleCoInsuranceHandler(Handler):
+    # No branch setup methods (this is the end!)
+    
+    # Main processing method
+    def process(context) -> InsuranceContext
+    
+    # Helper calculation methods (5)
+    def _apply_member_pays_no_co_insurance(context)
+    def _apply_member_pays_co_insurance_and_not_applied_to_oopmax(context)
+    def _apply_member_family_oopmax_met(context)
+    def _apply_member_individual_oopmax_met(context)
+    def _apply_member_pays_co_insurance_and_applied_to_oopmax(context)
+    def _apply_member_pays_oopmax_difference(context)</code></pre></p>
+<p><h3>Handler Responsibilities</h3></p>
+<p><pre><code class="language-">┌──────────────────────────────────────────────────┐
+│ DeductibleCoInsuranceHandler                     │
+├──────────────────────────────────────────────────┤
+│ 1. Check if coinsurance exists (> 0)            │
+│ 2. Check if coinsurance applies to OOPMax       │
+│ 3. Check if OOPMax already met                  │
+│ 4. Calculate coinsurance:                       │
+│    (coinsurance% / 100) * service_amount        │
+│ 5. Compare coinsurance to OOPMax remaining      │
+│ 6. Apply appropriate payment                    │
+│ 7. Update OOPMax (if applicable)                │
+│ 8. Mark calculation COMPLETE (ALWAYS)           │
+│ 9. Add trace entries                            │
+└──────────────────────────────────────────────────┘</code></pre></p>
+<p>---</p>
+<p><h2>4. Complete Code Structure</h2></p>
+<p><h3>Full Code (188 Lines)</h3></p>
+<p><pre><code class="language-python">from app.core.base import Handler, InsuranceContext</p>
+<p>class DeductibleCoInsuranceHandler(Handler):
+    """Determines any member co-insurance"""</p>
+<p>    def process(self, context):
+        # Check 1: Is coinsurance 0?
+        if not context.cost_share_coinsurance > 0:
+            return self._apply_member_pays_no_co_insurance(context)
+        
+        # Check 2: Does coinsurance apply to OOPMax?
+        if not context.coins_applies_oop:
+            return self._apply_member_pays_co_insurance_and_not_applied_to_oopmax(context)
+        
+        # Check 3: Is family OOPMax met?
+        if (
+            "oopmax" in context.accum_code
+            and "oopmax_family" in context.accum_level
+            and context.oopmax_family_calculated == 0
+        ):
+            return self._apply_member_family_oopmax_met(context)
+        
+        # Check 4: Is individual OOPMax met?
+        if (
+            "oopmax" in context.accum_code
+            and "oopmax_individual" in context.accum_level
+            and context.oopmax_individual_calculated == 0
+        ):
+            return self._apply_member_individual_oopmax_met(context)
+        
+        # Check 5: Calculate coinsurance and compare to OOPMax
+        co_insurance_amount = (int(context.cost_share_coinsurance) / 100) * context.service_amount
+        
+        if co_insurance_amount < context.service_amount:
+            if (
+                context.oopmax_individual_calculated is not None
+                and context.oopmax_family_calculated is not None
+                and co_insurance_amount < context.oopmax_individual_calculated
+                and co_insurance_amount < context.oopmax_family_calculated
+            ):
+                return self._apply_member_pays_co_insurance_and_applied_to_oopmax(context)
+            else:
+                return self._apply_member_pays_oopmax_difference(context)
+        else:
+            # Coinsurance >= service (shouldn't happen)
+            context.calculation_complete = True
+            return context</p>
+<p>    # Helper methods (5 calculation methods)
+    def _apply_member_pays_no_co_insurance(context)
+    def _apply_member_pays_co_insurance_and_not_applied_to_oopmax(context)
+    def _apply_member_family_oopmax_met(context)
+    def _apply_member_individual_oopmax_met(context)
+    def _apply_member_pays_co_insurance_and_applied_to_oopmax(context)
+    def _apply_member_pays_oopmax_difference(context)</code></pre></p>
+<p>---</p>
+<p><h2>5. Main Method: process()</h2></p>
+<p><h3>Method Signature (Line 7)</h3></p>
+<p><pre><code class="language-python">def process(self, context):</code></pre></p>
+<p><strong>Input:</strong> InsuranceContext with:
+<li><code>cost_share_coinsurance</code>: Coinsurance percentage (e.g., 20.0 for 20%)</li>
+<li><code>service_amount</code>: Remaining service cost</li>
+<li><code>coins_applies_oop</code>: Flag if coinsurance counts toward OOPMax</li>
+<li><code>oopmax_individual_calculated</code>: Remaining individual OOPMax</li>
+<li><code>oopmax_family_calculated</code>: Remaining family OOPMax</li>
+<li><code>accum_code</code>: List of accumulator codes</li>
+<li><code>accum_level</code>: List of accumulator levels</li></p>
+<p><strong>Output:</strong> Modified InsuranceContext with:
+<li><code>member_pays</code>: Updated with coinsurance payment</li>
+<li><code>amount_coinsurance</code>: Coinsurance amount</li>
+<li>OOPMax values: Reduced (if applicable)</li>
+<li><code>calculation_complete</code>: Set to True (ALWAYS)</li></p>
+<p><h3>Processing Flow</h3></p>
+<p><pre><code class="language-">1. Check if coinsurance = 0
+   YES → No coinsurance, complete
+   NO → Continue</p>
+<p><li>Check if coinsurance applies to OOPMax</li>
+   NO → Apply coinsurance, don't update OOPMax
+   YES → Continue</p>
+<p><li>Check if family OOPMax met</li>
+   YES → Member pays $0, complete
+   NO → Continue</p>
+<p><li>Check if individual OOPMax met</li>
+   YES → Member pays $0, complete
+   NO → Continue</p>
+<p><li>Calculate coinsurance amount</li>
+   Compare to OOPMax
+   
+<li>Apply appropriate payment:</li>
+   - Standard coinsurance (< OOPMax)
+   - OOPMax difference (>= OOPMax)
+   
+<li>Mark calculation complete</code></pre></li></p>
+<p><h3>Step-by-Step Breakdown</h3></p>
+<p><h4><strong>Step 1: Check if Coinsurance = 0 (Lines 9-11)</strong></h4></p>
+<p><pre><code class="language-python">if not context.cost_share_coinsurance > 0:
+    context.trace_decision("Process", "The co-insurance is zero", True)
+    return self._apply_member_pays_no_co_insurance(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Is coinsurance 0% or not set?</li>
+<li>If yes: Member pays nothing, insurance pays 100%</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">cost_share_coinsurance = 0</p>
+<p>Result: Member pays $0, calculation complete</code></pre></p>
+<p>---</p>
+<p><h4><strong>Step 2: Check if Coinsurance Applies to OOPMax (Lines 13-19)</strong></h4></p>
+<p><pre><code class="language-python">if not context.coins_applies_oop:
+    context.trace_decision(
+        "Process", "The co-insurance amount does not apply to OOP", True
+    )
+    return self._apply_member_pays_co_insurance_and_not_applied_to_oopmax(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Does coinsurance payment count toward OOPMax?</li>
+<li>Rare scenario (most plans: coinsurance counts)</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Rare plan</h1>
+cost_share_coinsurance = 20.0
+service_amount = 1000.00
+coins_applies_oop = False</p>
+<p>Result: Member pays $200, OOPMax unchanged</code></pre></p>
+<p>---</p>
+<p><h4><strong>Step 3: Check if Family OOPMax Met (Lines 23-33)</strong></h4></p>
+<p><pre><code class="language-python">if (
+    "oopmax" in context.accum_code
+    and "oopmax_family" in context.accum_level
+    and context.oopmax_family_calculated == 0
+):
+    context.trace_decision(
+        "Process",
+        "Benefit code contains 'oopmax' and benefit level is 'family'",
+        True,
+    )
+    return self._apply_member_family_oopmax_met(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Is family OOPMax already met ($0 remaining)?</li>
+<li>If yes: Insurance pays 100%, member pays $0</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">accum_code = ["oopmax", "deductible"]
+accum_level = ["oopmax_family", "deductible_individual"]
+oopmax_family_calculated = 0</p>
+<p>Result: Member pays $0, calculation complete</code></pre></p>
+<p>---</p>
+<p><h4><strong>Step 4: Check if Individual OOPMax Met (Lines 34-40)</strong></h4></p>
+<p><pre><code class="language-python">if (
+    "oopmax" in context.accum_code
+    and "oopmax_individual" in context.accum_level
+    and context.oopmax_individual_calculated == 0
+):
+    context.trace_decision("Process", "The individual OOPMax is zero", True)
+    return self._apply_member_individual_oopmax_met(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Is individual OOPMax already met ($0 remaining)?</li>
+<li>If yes: Insurance pays 100%, member pays $0</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">accum_code = ["oopmax", "deductible"]
+accum_level = ["oopmax_individual", "deductible_individual"]
+oopmax_individual_calculated = 0</p>
+<p>Result: Member pays $0, calculation complete</code></pre></p>
+<p>---</p>
+<p><h4><strong>Step 5: Calculate Coinsurance and Compare to OOPMax (Lines 42-82)</strong></h4></p>
+<p><pre><code class="language-python"><h1>Calculate coinsurance amount</h1>
+co_insurance_amount = (int(context.cost_share_coinsurance) / 100) * context.service_amount</p>
+<p>if co_insurance_amount < context.service_amount:
+    # Coinsurance is valid
+    
+    # Check if coinsurance < both OOPMax values
+    if (
+        context.oopmax_individual_calculated is not None
+        and context.oopmax_family_calculated is not None
+        and co_insurance_amount < context.oopmax_individual_calculated
+        and co_insurance_amount < context.oopmax_family_calculated
+    ):
+        # Standard: Apply coinsurance, update OOPMax
+        return self._apply_member_pays_co_insurance_and_applied_to_oopmax(context)
+    else:
+        # OOPMax will be met: Apply OOPMax difference
+        return self._apply_member_pays_oopmax_difference(context)
+else:
+    # Coinsurance >= service (edge case, shouldn't happen)
+    context.calculation_complete = True
+    return context</code></pre></p>
+<p><strong>What This Does:</strong>
+<li>Calculate coinsurance: <code>(20 / 100) * $1,000 = $200</code></li>
+<li>Compare to OOPMax remaining</li>
+<li>Apply appropriate payment</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Standard case</h1>
+cost_share_coinsurance = 20.0
+service_amount = 1000.00
+oopmax_individual_calculated = 5000.00</p>
+<p>co_insurance_amount = (20 / 100) * 1000 = 200</p>
+<p>200 < 1000? YES (valid)
+200 < 5000? YES (won't meet OOPMax)</p>
+<p>Route: _apply_member_pays_co_insurance_and_applied_to_oopmax
+Result: Member pays $200, OOPMax reduced by $200</code></pre></p>
+<p>---</p>
+<p><h2>6. Helper Methods Explained</h2></p>
+<p><h3>Method 1: _apply_member_pays_no_co_insurance() (Lines 84-94)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_no_co_insurance(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays no co-insurance. No other cost sharing"""
+    
+    # Nothing to update
+    context.calculation_complete = True
+    
+    context.trace("_apply_member_pays_no_co_insurance", "Logic applied")
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Handle scenario when coinsurance is 0%</p>
+<p><strong>What Happens:</strong>
+<li>Member pays nothing (already paid in previous handlers)</li>
+<li>No values updated</li>
+<li>Calculation marked complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+cost_share_coinsurance = 0
+member_pays = 500.00 (from previous handlers)
+service_amount = 2000.00</p>
+<p><h1>After</h1>
+member_pays = 500.00 (unchanged)
+calculation_complete = True</p>
+<p>Result: Insurance pays remaining $2,000</code></pre></p>
+<p>---</p>
+<p><h3>Method 2: _apply_member_pays_co_insurance_and_not_applied_to_oopmax() (Lines 96-112)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_co_insurance_and_not_applied_to_oopmax(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays co-insurance amount. OOPMax will not be updated"""
+    
+    co_insurance_amount = (
+        int(context.cost_share_coinsurance) / 100
+    ) * context.service_amount
+    
+    context.member_pays = context.member_pays + co_insurance_amount
+    context.service_amount = context.service_amount - co_insurance_amount
+    context.amount_coinsurance = co_insurance_amount
+    context.calculation_complete = True
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Apply coinsurance WITHOUT counting toward OOPMax (rare)</p>
+<p><strong>What Happens:</strong>
+<li>Calculate coinsurance: <code>(20 / 100) * $1,000 = $200</code></li>
+<li>Member pays coinsurance</li>
+<li>Service amount reduced</li>
+<li>OOPMax NOT updated</li>
+<li>Calculation complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+cost_share_coinsurance = 20.0
+service_amount = 1000.00
+member_pays = 0
+oopmax_individual_calculated = 5000.00</p>
+<p><h1>Calculate</h1>
+co_insurance_amount = (20 / 100) * 1000 = 200</p>
+<p><h1>After</h1>
+member_pays = 200.00
+service_amount = 800.00
+amount_coinsurance = 200.00
+oopmax_individual_calculated = 5000.00 (UNCHANGED!)
+calculation_complete = True</p>
+<p>Result: Member pays $200, OOPMax not reduced</code></pre></p>
+<p>---</p>
+<p><h3>Method 3: _apply_member_family_oopmax_met() (Lines 114-124)</h3></p>
+<p><pre><code class="language-python">def _apply_member_family_oopmax_met(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Since OOPMax has been reached for family. No co-insurance applied"""
+    
+    context.member_pays = 0.0
+    context.calculation_complete = True
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Handle when family OOPMax is already met</p>
+<p><strong>What Happens:</strong>
+<li>Member pays $0 (insurance pays 100%)</li>
+<li>member_pays set to 0.0 (not incremented!)</li>
+<li>Calculation complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+oopmax_family_calculated = 0 (MET!)
+service_amount = 1000.00</p>
+<p><h1>After</h1>
+member_pays = 0.0
+calculation_complete = True</p>
+<p>Result: Insurance pays full $1,000</code></pre></p>
+<p><strong>Important Note:</strong> This sets <code>member_pays = 0.0</code> (not <code>+= 0.0</code>). This might reset previous payments. <strong>Potential bug or special case handling.</strong></p>
+<p>---</p>
+<p><h3>Method 4: _apply_member_individual_oopmax_met() (Lines 126-136)</h3></p>
+<p><pre><code class="language-python">def _apply_member_individual_oopmax_met(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Since OOPMax has been reached for individual. No co-insurance applied"""
+    
+    context.member_pays = 0.0
+    context.calculation_complete = True
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Handle when individual OOPMax is already met</p>
+<p><strong>What Happens:</strong>
+<li>Member pays $0 (insurance pays 100%)</li>
+<li>member_pays set to 0.0</li>
+<li>Calculation complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+oopmax_individual_calculated = 0 (MET!)
+service_amount = 1000.00</p>
+<p><h1>After</h1>
+member_pays = 0.0
+calculation_complete = True</p>
+<p>Result: Insurance pays full $1,000</code></pre></p>
+<p><strong>Same Note:</strong> Sets <code>member_pays = 0.0</code>. Same potential issue as family method.</p>
+<p>---</p>
+<p><h3>Method 5: _apply_member_pays_co_insurance_and_applied_to_oopmax() (Lines 138-157)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_co_insurance_and_applied_to_oopmax(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays co-insurance amount. OOPMax will be updated"""
+    
+    co_insurance_amount = (
+        int(context.cost_share_coinsurance) / 100
+    ) * context.service_amount
+    
+    context.member_pays = context.member_pays + co_insurance_amount
+    context.service_amount = context.service_amount - co_insurance_amount
+    
+    if context.oopmax_individual_calculated is not None:
+        context.oopmax_individual_calculated -= co_insurance_amount
+    if context.oopmax_family_calculated is not None:
+        context.oopmax_family_calculated -= co_insurance_amount
+    
+    context.amount_coinsurance = co_insurance_amount
+    context.calculation_complete = True
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Apply standard coinsurance and update OOPMax (most common)</p>
+<p><strong>What Happens:</strong>
+<li>Calculate coinsurance</li>
+<li>Member pays coinsurance</li>
+<li>Service amount reduced</li>
+<li>OOPMax reduced (both individual and family)</li>
+<li>Calculation complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+cost_share_coinsurance = 20.0
+service_amount = 1000.00
+member_pays = 500.00 (deductible paid earlier)
+oopmax_individual_calculated = 5000.00
+oopmax_family_calculated = 10000.00</p>
+<p><h1>Calculate</h1>
+co_insurance_amount = (20 / 100) * 1000 = 200</p>
+<p><h1>After</h1>
+member_pays = 700.00 (500 + 200)
+service_amount = 800.00
+oopmax_individual_calculated = 4800.00 (5000 - 200)
+oopmax_family_calculated = 9800.00 (10000 - 200)
+amount_coinsurance = 200.00
+calculation_complete = True</p>
+<p>Result: Member pays $200 coinsurance, OOPMax reduced</code></pre></p>
+<p>---</p>
+<p><h3>Method 6: _apply_member_pays_oopmax_difference() (Lines 159-187)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_oopmax_difference(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays oopmax difference"""
+    
+    # Calculate min OOPMax
+    if (
+        context.oopmax_individual_calculated is not None
+        and context.oopmax_family_calculated is not None
+    ):
+        min_oopmax = min(
+            context.oopmax_individual_calculated, context.oopmax_family_calculated
+        )
+    elif context.oopmax_individual_calculated is not None:
+        min_oopmax = context.oopmax_individual_calculated
+    elif context.oopmax_family_calculated is not None:
+        min_oopmax = context.oopmax_family_calculated
+    else:
+        context.calculation_complete = True
+        return context
+    
+    context.member_pays = context.member_pays + min_oopmax
+    context.service_amount = context.service_amount - min_oopmax
+    
+    if context.oopmax_family_calculated is not None:
+        context.oopmax_family_calculated -= min_oopmax
+    if context.oopmax_individual_calculated is not None:
+        context.oopmax_individual_calculated -= min_oopmax
+    
+    context.amount_coinsurance = min_oopmax
+    context.calculation_complete = True
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Handle when coinsurance causes OOPMax to be met</p>
+<p><strong>What Happens:</strong>
+<li>Find minimum OOPMax (limiting value)</li>
+<li>Member pays OOPMax difference (not full coinsurance)</li>
+<li>OOPMax set to 0 (met!)</li>
+<li>Calculation complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+cost_share_coinsurance = 20.0
+service_amount = 1000.00
+member_pays = 500.00
+oopmax_individual_calculated = 100.00 (almost met!)
+oopmax_family_calculated = 5000.00</p>
+<p><h1>Calculate</h1>
+co_insurance_amount = (20 / 100) * 1000 = 200
+min_oopmax = min(100, 5000) = 100</p>
+<p><h1>Since coinsurance (200) >= OOPMax (100)</h1>
+<h1>Member pays only OOPMax amount</h1></p>
+<p><h1>After</h1>
+member_pays = 600.00 (500 + 100)
+service_amount = 900.00
+oopmax_individual_calculated = 0 (MET!)
+oopmax_family_calculated = 4900.00
+amount_coinsurance = 100.00 (not 200!)
+calculation_complete = True</p>
+<p>Result: Member pays $100 (OOPMax), insurance pays $900</code></pre></p>
+<p>---</p>
+<p><h2>7. Key Concept: CoInsurance vs Copay</h2></p>
+<p><h3>Understanding the Difference</h3></p>
+<p><strong>Copay (Fixed Amount):</strong>
+<pre><code class="language-">Service: $1,000
+Copay: $30</p>
+<p>Member pays: $30 (always the same)
+Insurance pays: $970</code></pre></p>
+<p><strong>CoInsurance (Percentage):</strong>
+<pre><code class="language-">Service: $1,000
+Coinsurance: 20%</p>
+<p>Member pays: $200 (20% of $1,000)
+Insurance pays: $800</p>
+<p>Service: $100
+Coinsurance: 20%</p>
+<p>Member pays: $20 (20% of $100)
+Insurance pays: $80</p>
+<p>Note: Amount varies with service cost!</code></pre></p>
+<p><h3>Common Coinsurance Percentages</h3></p>
+<p><pre><code class="language-">80/20 Plan: Member pays 20%, Insurance pays 80%
+70/30 Plan: Member pays 30%, Insurance pays 70%
+50/50 Plan: Member pays 50%, Insurance pays 50%
+100/0 Plan: Member pays 0%, Insurance pays 100% (no coinsurance)</code></pre></p>
+<p><h3>Calculation Formula</h3></p>
+<p><pre><code class="language-python">coinsurance_amount = (coinsurance_percentage / 100) * service_amount</p>
+<p>Examples:
+  (20 / 100) * 1000 = 200
+  (30 / 100) * 500 = 150
+  (0 / 100) * 1000 = 0</code></pre></p>
+<p>---</p>
+<p><h2>8. Real-World Examples</h2></p>
+<p><h3>Example 1: Standard Coinsurance (Most Common)</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: MET
+Coinsurance: 20%
+OOPMax: $5,000 remaining
+coins_applies_oop = True</code></pre></p>
+<p><strong>Service:</strong> $1,000 surgery (after copay)</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python">context.cost_share_coinsurance = 20.0
+context.service_amount = 1000.00
+context.oopmax_individual_calculated = 5000.00</p>
+<p><h1>Step 1: Coinsurance > 0? YES</h1>
+<h1>Step 2: coins_applies_oop? YES</h1>
+<h1>Step 3: Family OOPMax met? NO</h1>
+<h1>Step 4: Individual OOPMax met? NO</h1>
+<h1>Step 5: Calculate coinsurance</h1></p>
+<p>co_insurance_amount = (20 / 100) * 1000 = 200</p>
+<p><h1>Compare to OOPMax</h1>
+200 < 5000? YES (won't meet OOPMax)</p>
+<p>Route: _apply_member_pays_co_insurance_and_applied_to_oopmax</p>
+<p>member_pays += 200
+oopmax_individual_calculated = 4800
+calculation_complete = True</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $200 (20%)
+Insurance pays: $800 (80%)
+OOPMax: $4,800 remaining
+Calculation: COMPLETE</code></pre></p>
+<p>---</p>
+<p><h3>Example 2: No Coinsurance (100% Coverage)</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: MET
+Coinsurance: 0%</code></pre></p>
+<p><strong>Service:</strong> $1,000</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python">context.cost_share_coinsurance = 0
+context.service_amount = 1000.00</p>
+<p><h1>Step 1: Coinsurance > 0? NO</h1></p>
+<p>Route: _apply_member_pays_no_co_insurance</p>
+<p>calculation_complete = True</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $0
+Insurance pays: $1,000 (100%)
+Calculation: COMPLETE</code></pre></p>
+<p>---</p>
+<p><h3>Example 3: OOPMax Already Met</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: MET
+Coinsurance: 20%
+OOPMax: $0 (already met!)</code></pre></p>
+<p><strong>Service:</strong> $1,000</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python">context.cost_share_coinsurance = 20.0
+context.service_amount = 1000.00
+context.oopmax_individual_calculated = 0
+context.accum_code = ["oopmax", "deductible"]
+context.accum_level = ["oopmax_individual", "deductible_individual"]</p>
+<p><h1>Step 1: Coinsurance > 0? YES</h1>
+<h1>Step 2: coins_applies_oop? YES</h1>
+<h1>Step 3: Family OOPMax met? NO</h1>
+<h1>Step 4: Individual OOPMax met? YES</h1></p>
+<p>Route: _apply_member_individual_oopmax_met</p>
+<p>member_pays = 0.0
+calculation_complete = True</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $0
+Insurance pays: $1,000 (100%)
+Calculation: COMPLETE</code></pre></p>
+<p>---</p>
+<p><h3>Example 4: Coinsurance Causes OOPMax to be Met</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: MET
+Coinsurance: 20%
+OOPMax: $100 remaining (almost met!)</code></pre></p>
+<p><strong>Service:</strong> $1,000</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python">context.cost_share_coinsurance = 20.0
+context.service_amount = 1000.00
+context.oopmax_individual_calculated = 100.00</p>
+<p><h1>Calculate coinsurance</h1>
+co_insurance_amount = (20 / 100) * 1000 = 200</p>
+<p><h1>Compare to OOPMax</h1>
+200 < 100? NO (will exceed OOPMax)</p>
+<p>Route: _apply_member_pays_oopmax_difference</p>
+<p>min_oopmax = 100
+member_pays += 100 (not 200!)
+oopmax_individual_calculated = 0 (MET!)
+amount_coinsurance = 100
+calculation_complete = True</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $100 (OOPMax limit, not $200 coinsurance)
+Insurance pays: $900
+OOPMax: MET!
+Calculation: COMPLETE</code></pre></p>
+<p>---</p>
+<p><h3>Example 5: Coinsurance Does NOT Count Toward OOPMax (Rare)</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: MET
+Coinsurance: 20%
+OOPMax: $5,000 remaining
+coins_applies_oop = False (RARE!)</code></pre></p>
+<p><strong>Service:</strong> $1,000</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python">context.cost_share_coinsurance = 20.0
+context.service_amount = 1000.00
+context.oopmax_individual_calculated = 5000.00
+context.coins_applies_oop = False</p>
+<p><h1>Step 1: Coinsurance > 0? YES</h1>
+<h1>Step 2: coins_applies_oop? NO</h1></p>
+<p>Route: _apply_member_pays_co_insurance_and_not_applied_to_oopmax</p>
+<p>co_insurance_amount = 200
+member_pays += 200
+oopmax_individual_calculated = 5000 (UNCHANGED!)
+calculation_complete = True</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $200
+Insurance pays: $800
+OOPMax: $5,000 remaining (NO CHANGE!)
+Calculation: COMPLETE</code></pre></p>
+<p>---</p>
+<p><h2>9. Integration with Handler Chain</h2></p>
+<p><h3>How This Handler is Reached</h3></p>
+<p><strong>From CostShareCoPayHandler:</strong></p>
+<p><pre><code class="language-python"><h1>After copay applied</h1>
+context = self._apply_member_pays_cost_share_copay(context)
+return self._deductible_co_insurance_handler.handle(context)</code></pre></p>
+<p><strong>From DeductibleCostShareCoPayHandler:</strong></p>
+<p><pre><code class="language-python"><h1>When coinsurance applies</h1>
+return self._deductible_co_insurance_handler.handle(context)</code></pre></p>
+<p><strong>From DeductibleOOPMaxHandler:</strong></p>
+<p><pre><code class="language-python"><h1>After deductible applied</h1>
+return self._deductible_co_insurance_handler.handle(context)</code></pre></p>
+<p><h3>Position in Chain</h3></p>
+<p><pre><code class="language-">1. ServiceCoverageHandler
+<li>BenefitLimitationHandler</li>
+<li>OOPMaxHandler</li>
+<li>DeductibleHandler</li>
+<li>[Various intermediate handlers]</li>
+   ↓
+<li>DeductibleCoInsuranceHandler ← YOU ARE HERE</li>
+   ↓
+COMPLETE ✓ (No more handlers)</code></pre></p>
+<p><h3>Flow Visualization</h3></p>
+<p><pre><code class="language-">    [Previous Handlers]
+              ↓
+  DeductibleCoInsuranceHandler
+              ↓
+      ┌───────────────┐
+      │ Coinsurance   │
+      │ = 0?          │
+      └───────┬───────┘
+              │
+        ┌─────┴─────┐
+        │           │
+       YES         NO
+        │           │
+        ↓           ↓
+   [No Coins]  ┌────────────┐
+   Complete    │coins_applies│
+               │_oop?       │
+               └─────┬──────┘
+                     │
+              ┌──────┴──────┐
+              │             │
+             NO            YES
+              │             │
+              ↓             ↓
+        [Apply Coins]  ┌─────────┐
+        [No OOPMax]    │OOPMax   │
+        Complete       │met?     │
+                       └────┬────┘
+                            │
+                      ┌─────┴─────┐
+                      │           │
+                     YES         NO
+                      │           │
+                      ↓           ↓
+                [Member  ┌────────────┐
+                pays $0] │Calculate & │
+                Complete │Apply       │
+                         │Coinsurance │
+                         └─────┬──────┘
+                               │
+                           Complete</code></pre></p>
+<p>---</p>
+<p><h2>10. Complete Code Walkthrough</h2></p>
+<p><h3>Line-by-Line Explanation</h3></p>
+<p><pre><code class="language-python"><h1>LINE 1: Import base classes</h1>
+from app.core.base import Handler, InsuranceContext</p>
+<p><h1>LINE 4: Define handler class</h1>
+class DeductibleCoInsuranceHandler(Handler):
+    # Terminal calculation handler
+    # Applies coinsurance (percentage-based cost sharing)
+    
+    
+    # LINE 5: Docstring
+    """Determines any member co-insurance"""
+    # Key: "Determines" - final decision on coinsurance</p>
+<p>    # LINE 7: Main processing method
+    def process(self, context):
+        # Input: Context with remaining service amount
+        # Output: Context with coinsurance applied, COMPLETE
+        
+        
+        # LINE 9-11: Check if coinsurance = 0
+        if not context.cost_share_coinsurance > 0:
+            # No coinsurance (0% or not set)
+            context.trace_decision("Process", "The co-insurance is zero", True)
+            # Member pays nothing for coinsurance
+            return self._apply_member_pays_no_co_insurance(context)
+        
+        
+        # LINE 13-19: Check if coinsurance applies to OOPMax
+        if not context.coins_applies_oop:
+            # Rare: Coinsurance does NOT count toward OOPMax
+            context.trace_decision(
+                "Process", "The co-insurance amount does not apply to OOP", True
+            )
+            # Apply coinsurance, don't update OOPMax
+            return self._apply_member_pays_co_insurance_and_not_applied_to_oopmax(
+                context
+            )
+        
+        
+        # LINE 21: TODO comment
+        # TODO: Add the Code and Level checks: code and level are added to the context
+        
+        
+        # LINE 23-33: Check if family OOPMax met
+        if (
+            "oopmax" in context.accum_code
+            and "oopmax_family" in context.accum_level
+            and context.oopmax_family_calculated == 0
+        ):
+            # Family OOPMax is met
+            context.trace_decision(
+                "Process",
+                "Benefit code contains 'oopmax' and benefit level is 'family'",
+                True,
+            )
+            # Member pays $0, insurance pays 100%
+            return self._apply_member_family_oopmax_met(context)
+        
+        
+        # LINE 34-40: Check if individual OOPMax met
+        if (
+            "oopmax" in context.accum_code
+            and "oopmax_individual" in context.accum_level
+            and context.oopmax_individual_calculated == 0
+        ):
+            # Individual OOPMax is met
+            context.trace_decision("Process", "The individual OOPMax is zero", True)
+            # Member pays $0, insurance pays 100%
+            return self._apply_member_individual_oopmax_met(context)
+        
+        
+        # LINE 42-82: Calculate coinsurance and apply
+        # Comment: co insurance is a percentage. 20.0 is 20%
+        
+        # Calculate coinsurance amount
+        if (
+            (int(context.cost_share_coinsurance) / 100) * context.service_amount
+        ) < context.service_amount:
+            # Coinsurance is valid (less than service)
+            
+            # LINE 46: TODO comment
+            # TODO: Do we need to check the level and code here?
+            
+            # LINE 47-50: Debug print (should be removed)
+            print(
+                "context.oopmax_individual_calculated",
+                context.oopmax_individual_calculated,
+            )
+            
+            # LINE 51-67: Check if coinsurance < both OOPMax values
+            if (
+                context.oopmax_individual_calculated is not None
+                and context.oopmax_family_calculated is not None
+                and (int(context.cost_share_coinsurance) / 100) * context.service_amount
+                < context.oopmax_individual_calculated
+                and (int(context.cost_share_coinsurance) / 100) * context.service_amount
+                < context.oopmax_family_calculated
+            ):
+                # Coinsurance won't cause OOPMax to be met
+                context.trace_decision(
+                    "Process",
+                    "The co-insurance amount is less than the individual and family OOPMax",
+                    True,
+                )
+                
+                # Apply coinsurance, update OOPMax
+                return self._apply_member_pays_co_insurance_and_applied_to_oopmax(
+                    context
+                )
+            
+            # LINE 68-74: Coinsurance >= OOPMax
+            else:
+                # Coinsurance will cause OOPMax to be met
+                context.trace_decision(
+                    "Process",
+                    "The co-insurance amount is less than the individual and family OOPMax",
+                    False,
+                )
+                # Apply OOPMax difference
+                return self._apply_member_pays_oopmax_difference(context)
+        
+        # LINE 75-82: Edge case - coinsurance >= service
+        else:
+            # Shouldn't happen (coinsurance % should be < 100)
+            context.trace_decision(
+                "Process",
+                "The co-insurance amount can never be greater than the service amount",
+                True,
+            )
+            # Mark complete and return
+            context.calculation_complete = True
+            return context</p>
+<p>    # LINE 84-94: Helper - No coinsurance
+    def _apply_member_pays_no_co_insurance(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Member pays no co-insurance. No other cost sharing"""
+        
+        # Nothing to update (member already paid in previous handlers)
+        context.calculation_complete = True
+        
+        # Add trace
+        context.trace("_apply_member_pays_no_co_insurance", "Logic applied")
+        
+        # Return context
+        return context</p>
+<p>    # LINE 96-112: Helper - Coinsurance does NOT apply to OOPMax
+    def _apply_member_pays_co_insurance_and_not_applied_to_oopmax(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Member pays co-insurance amount. OOPMax will not be updated"""
+        
+        # Calculate coinsurance
+        co_insurance_amount = (
+            int(context.cost_share_coinsurance) / 100
+        ) * context.service_amount
+        
+        # Member pays coinsurance
+        context.member_pays = context.member_pays + co_insurance_amount
+        
+        # Reduce service amount
+        context.service_amount = context.service_amount - co_insurance_amount
+        
+        # Track coinsurance
+        context.amount_coinsurance = co_insurance_amount
+        
+        # Mark complete
+        context.calculation_complete = True
+        
+        # Add trace
+        context.trace(
+            "_apply_member_pays_co_insurance_and_not_applied_to_oopmax", "Logic applied"
+        )
+        
+        # Return context
+        return context</p>
+<p>    # LINE 114-124: Helper - Family OOPMax met
+    def _apply_member_family_oopmax_met(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Since OOPMax has been reached for family. No co-insurance applied"""
+        
+        # Member pays $0 (set to 0.0, not incremented!)
+        context.member_pays = 0.0
+        
+        # Mark complete
+        context.calculation_complete = True
+        
+        # Add trace
+        context.trace("_apply_member_family_oopmax_met", "Logic applied")
+        
+        # Return context
+        return context</p>
+<p>    # LINE 126-136: Helper - Individual OOPMax met
+    def _apply_member_individual_oopmax_met(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Since OOPMax has been reached for individual. No co-insurance applied"""
+        
+        # Member pays $0 (set to 0.0, not incremented!)
+        context.member_pays = 0.0
+        
+        # Mark complete
+        context.calculation_complete = True
+        
+        # Add trace
+        context.trace("_apply_member_individual_oopmax_met", "Logic applied")
+        
+        # Return context
+        return context</p>
+<p>    # LINE 138-157: Helper - Standard coinsurance
+    def _apply_member_pays_co_insurance_and_applied_to_oopmax(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Member pays co-insurance amount. OOPMax will be updated"""
+        
+        # Calculate coinsurance
+        co_insurance_amount = (
+            int(context.cost_share_coinsurance) / 100
+        ) * context.service_amount
+        
+        # Member pays coinsurance
+        context.member_pays = context.member_pays + co_insurance_amount
+        
+        # Reduce service amount
+        context.service_amount = context.service_amount - co_insurance_amount
+        
+        # Reduce individual OOPMax
+        if context.oopmax_individual_calculated is not None:
+            context.oopmax_individual_calculated -= co_insurance_amount
+        
+        # Reduce family OOPMax
+        if context.oopmax_family_calculated is not None:
+            context.oopmax_family_calculated -= co_insurance_amount
+        
+        # Track coinsurance
+        context.amount_coinsurance = co_insurance_amount
+        
+        # Mark complete
+        context.calculation_complete = True
+        
+        # Add trace
+        context.trace(
+            "_apply_member_pays_co_insurance_and_applied_to_oopmax", "Logic applied"
+        )
+        
+        # Return context
+        return context</p>
+<p>    # LINE 159-187: Helper - OOPMax difference
+    def _apply_member_pays_oopmax_difference(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Member pays oopmax difference"""
+        
+        # Calculate minimum OOPMax (4 cases)
+        if (
+            context.oopmax_individual_calculated is not None
+            and context.oopmax_family_calculated is not None
+        ):
+            # Both exist: use minimum
+            min_oopmax = min(
+                context.oopmax_individual_calculated, context.oopmax_family_calculated
+            )
+        elif context.oopmax_individual_calculated is not None:
+            # Only individual
+            min_oopmax = context.oopmax_individual_calculated
+        elif context.oopmax_family_calculated is not None:
+            # Only family
+            min_oopmax = context.oopmax_family_calculated
+        else:
+            # Neither (edge case)
+            context.calculation_complete = True
+            return context
+        
+        # Member pays OOPMax amount
+        context.member_pays = context.member_pays + min_oopmax
+        
+        # Reduce service
+        context.service_amount = context.service_amount - min_oopmax
+        
+        # Set family OOPMax to 0
+        if context.oopmax_family_calculated is not None:
+            context.oopmax_family_calculated -= min_oopmax
+        
+        # Set individual OOPMax to 0
+        if context.oopmax_individual_calculated is not None:
+            context.oopmax_individual_calculated -= min_oopmax
+        
+        # Track as coinsurance
+        context.amount_coinsurance = min_oopmax
+        
+        # Mark complete
+        context.calculation_complete = True
+        
+        # Add trace
+        context.trace("_apply_member_pays_oopmax_difference", "Logic applied")
+        
+        # Return context
+        return context</code></pre></p>
+<p>---</p>
+<p><h2>11. Decision Tree and Flow</h2></p>
+<p><h3>Complete Decision Tree</h3></p>
+<p><pre><code class="language-">┌──────────────────────────────────────────────┐
+│ START: DeductibleCoInsuranceHandler          │
+│ Context: Final cost sharing calculation      │
+└──────────────────┬───────────────────────────┘
+                   ↓
+          ┌────────────────┐
+          │ Coinsurance    │
+          │ = 0?           │
+          └────────┬───────┘
+                   │
+            ┌──────┴──────┐
+            │             │
+           YES           NO
+            │             │
+            ↓             ↓
+      [No Coins]  ┌───────────────┐
+      Complete    │coins_applies_ │
+                  │oop?           │
+                  └───────┬───────┘
+                          │
+                   ┌──────┴──────┐
+                   │             │
+                  NO            YES
+                   │             │
+                   ↓             ↓
+           [Apply Coins]  ┌──────────────┐
+           [No OOPMax]    │Family OOPMax │
+           Complete       │met?          │
+                          └──────┬───────┘
+                                 │
+                          ┌──────┴──────┐
+                          │             │
+                         YES           NO
+                          │             │
+                          ↓             ↓
+                  [Member    ┌────────────────┐
+                  pays $0]   │Individual      │
+                  Complete   │OOPMax met?     │
+                             └────────┬───────┘
+                                      │
+                               ┌──────┴──────┐
+                               │             │
+                              YES           NO
+                               │             │
+                               ↓             ↓
+                       [Member  ┌──────────────┐
+                       pays $0] │Coinsurance < │
+                       Complete │both OOPMax?  │
+                                └──────┬───────┘
+                                       │
+                                ┌──────┴──────┐
+                                │             │
+                               YES           NO
+                                │             │
+                                ↓             ↓
+                        [Apply Coins]  [Apply OOPMax]
+                        [Update OOP]   [Difference]
+                        Complete       Complete</code></pre></p>
+<p>---</p>
+<p><h2>12. Terminal Handler Characteristics</h2></p>
+<p><h3>Why This is a Terminal Handler</h3></p>
+<p><strong>Key Characteristics:</strong></p>
+<p><li><strong>Always marks calculation_complete = True</strong></li>
+   - Every helper method sets this flag
+   - No routing to other handlers
+   
+<li><strong>No next handler setup</strong></li>
+   - No <code>set_next_handler()</code> methods
+   - No references to other handlers
+   
+<li><strong>Final cost sharing</strong></li>
+   - Last chance for member to pay
+   - After this: insurance pays 100%
+   
+<li><strong>End of chain</strong></li>
+   - Calculation stops here
+   - Context returned to caller</p>
+<p><h3>All Paths Lead to Complete</h3></p>
+<p><pre><code class="language-python"><h1>Path 1: No coinsurance</h1>
+context.calculation_complete = True</p>
+<p><h1>Path 2: Coinsurance not applied to OOPMax</h1>
+context.calculation_complete = True</p>
+<p><h1>Path 3: Family OOPMax met</h1>
+context.calculation_complete = True</p>
+<p><h1>Path 4: Individual OOPMax met</h1>
+context.calculation_complete = True</p>
+<p><h1>Path 5: Standard coinsurance</h1>
+context.calculation_complete = True</p>
+<p><h1>Path 6: OOPMax difference</h1>
+context.calculation_complete = True</p>
+<p><h1>Every path → COMPLETE</h1></code></pre></p>
+<p><h3>Handler Chain Completion</h3></p>
+<p><pre><code class="language-">ServiceCoverageHandler → Continue
+BenefitLimitationHandler → Continue or Complete
+OOPMaxHandler → Continue
+DeductibleHandler → Continue
+[Various handlers] → Continue
+DeductibleCoInsuranceHandler → ALWAYS COMPLETE ✓</code></pre></p>
+<p>---</p>
+<p><h2>Summary</h2></p>
+<p><h3>What We Learned</h3></p>
+<p><li><strong>DeductibleCoInsuranceHandler</strong> is a TERMINAL handler that applies coinsurance</li></p>
+<p><li><strong>Six Helper Methods:</strong></li>
+   - No coinsurance (0%)
+   - Coinsurance not applied to OOPMax (rare)
+   - Family OOPMax met
+   - Individual OOPMax met
+   - Standard coinsurance (most common)
+   - OOPMax difference</p>
+<p><li><strong>Always Completes:</strong></li>
+   - Every path sets <code>calculation_complete = True</code>
+   - No routing to other handlers
+   - End of calculation chain</p>
+<p><li><strong>Coinsurance Formula:</strong></li>
+   - <code>(percentage / 100) * service_amount</code>
+   - Example: <code>(20 / 100) * 1000 = 200</code></p>
+<p><li><strong>OOPMax Awareness:</strong></li>
+   - Checks if already met
+   - Applies difference if payment would exceed
+   - Updates both individual and family</p>
+<p><h3>Key Takeaways</h3></p>
+<p>✓ <strong>Terminal Handler</strong>: Always completes, never routes
+✓ <strong>Coinsurance</strong>: Percentage-based cost sharing
+✓ <strong>OOPMax Aware</strong>: Checks and updates OOPMax
+✓ <strong>Six Scenarios</strong>: Handles all coinsurance cases
+✓ <strong>Formula-Based</strong>: Calculates based on percentage
+✓ <strong>End of Chain</strong>: Last handler in sequence</p>
+<p><h3>Real-World Value</h3></p>
+<p><strong>Ensures:</strong>
+<li>Accurate coinsurance calculation</li>
+<li>OOPMax properly tracked</li>
+<li>Member never overpays</li>
+<li>Calculation completes properly</li></p>
+<p><strong>Handles:</strong>
+<li>Standard coinsurance (20% of $1,000 = $200)</li>
+<li>No coinsurance (0% = $0)</li>
+<li>OOPMax met (member pays $0)</li>
+<li>OOPMax nearly met (member pays remainder)</li>
+<li>Rare: coinsurance doesn't count toward OOPMax</li></p>
+<p>---</p>
+<p><strong>End of Deductible CoInsurance Handler Deep Dive</strong>
+</p>
+    </div>
+    <div class="footer">
+        <p><strong>Deductible CoInsurance Handler - Technical Documentation</strong></p>
+        <p>© 2025 | Complete Deep Dive of deductible_co_insurance_handler.py</p>
+    </div>
+</body>
+</html>
