@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Deductible CoPay Handler Deep Dive</title>
+    <style>
+        @page {
+            margin: 0.75in;
+        }
+        @media print {
+            body { font-size: 10pt; }
+            h1 { page-break-before: always; margin-top: 0; }
+            h1:first-of-type { page-break-before: auto; }
+            h2 { page-break-before: always; margin-top: 0; }
+            h2:first-of-type { page-break-before: auto; }
+            pre, table { page-break-inside: avoid; }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            line-height: 1.7;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #2c3e50;
+        }
+        .cover {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: #2c3e50;
+            margin: -40px -20px 60px -20px;
+            padding: 100px 20px;
+            page-break-after: always;
+        }
+        .cover h1 {
+            font-size: 3.5em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.5);
+        }
+        .cover .subtitle {
+            font-size: 1.8em;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #fa709a;
+            padding-bottom: 15px;
+            margin-top: 60px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 12px;
+            margin-top: 50px;
+            font-size: 2em;
+        }
+        h3 {
+            color: #fa709a;
+            margin-top: 35px;
+            font-size: 1.5em;
+        }
+        h4 {
+            color: #fee140;
+            margin-top: 25px;
+            font-size: 1.2em;
+        }
+        code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: Monaco, 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        pre code {
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 25px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 14px;
+            text-align: left;
+        }
+        th {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: #2c3e50;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        li {
+            margin: 10px 0;
+        }
+        .footer {
+            margin-top: 80px;
+            padding-top: 30px;
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <h1>Deductible CoPay Handler</h1>
+        <div class="subtitle">Complete Deep Dive</div>
+        <div class="subtitle">deductible_co_pay_handler.py</div>
+        <div class="version">
+            <p>Complex Handler - Copay with Deductible Application</p>
+            <p>Technical Documentation v1.0</p>
+            <p>October 2025</p>
+        </div>
+    </div>
+    <div class="content">
+        <p><h1>Deductible CoPay Handler - Complete Deep Dive</h1></p>
+<p><h2>Comprehensive Explanation of <code>deductible_co_pay_handler.py</code></h2></p>
+<p>---</p>
+<p><h2>Table of Contents</h2></p>
+<p><li>[Executive Summary](#executive-summary)</li>
+<li>[What is This Handler?](#what-is-this-handler)</li>
+<li>[Handler Overview](#handler-overview)</li>
+<li>[Complete Code Structure](#complete-code-structure)</li>
+<li>[Main Method: process()](#main-method-process)</li>
+<li>[Helper Methods Explained](#helper-methods-explained)</li>
+<li>[Key Concept: Copay with Deductible](#key-concept-copay-with-deductible)</li>
+<li>[Real-World Examples](#real-world-examples)</li>
+<li>[Integration with Handler Chain](#integration-with-handler-chain)</li>
+<li>[Complete Code Walkthrough](#complete-code-walkthrough)</li>
+<li>[Decision Tree and Flow](#decision-tree-and-flow)</li>
+<li>[Complex Routing Logic](#complex-routing-logic)</li></p>
+<p>---</p>
+<p><h2>1. Executive Summary</h2></p>
+<p><h3>What Does This Handler Do?</h3></p>
+<p>The <strong>Deductible CoPay Handler</strong> is a <strong>COMPLEX CALCULATION AND ROUTING HANDLER</strong> that applies copay in scenarios where deductible is also being applied (deductible before or after copay). It manages the interaction between copay, deductible, service costs, and OOPMax.</p>
+<p><strong>Core Questions:</strong>
+<li>"Is OOPMax already met?"</li>
+<li>"Does copay apply to OOPMax?"</li>
+<li>"Is copay more or less than service cost?"</li>
+<li>"Should copay count toward deductible?"</li>
+<li>"What happens next after copay is applied?"</li></p>
+<p><h3>Position in Handler Chain</h3></p>
+<p><pre><code class="language-">ServiceCoverageHandler
+    ↓
+BenefitLimitationHandler
+    ↓
+OOPMaxHandler
+    ↓
+DeductibleHandler (determines order: deductible before/after copay)
+    ↓
+[If deductible after copay]
+    ↓
+DeductibleCoPayHandler ← YOU ARE HERE
+    ↓
+    ├─ Route A: DeductibleCoInsuranceHandler (standard)
+    ├─ Route B: DeductibleOOPMaxHandler (apply deductible)
+    └─ Route C: OOPMaxCopayHandler (OOPMax met)</code></pre></p>
+<p><h3>Key Responsibilities</h3></p>
+<p><li><strong>Check</strong> if OOPMax already met (family or individual)</li>
+<li><strong>Check</strong> if copay applies to OOPMax</li>
+<li><strong>Compare</strong> copay vs service cost</li>
+<li><strong>Calculate</strong> and apply copay payment</li>
+<li><strong>Update</strong> OOPMax (if applicable)</li>
+<li><strong>Update</strong> deductible (if copay counts toward it)</li>
+<li><strong>Route</strong> to appropriate next handler</li></p>
+<p><h3>Handler Characteristics</h3></p>
+<p><li><strong>File</strong>: <code>deductible_co_pay_handler.py</code></li>
+<li><strong>Lines of Code</strong>: 271 (complex handler)</li>
+<li><strong>Type</strong>: Calculation + Routing Handler</li>
+<li><strong>Modifies Context</strong>: YES (member_pays, copay, OOPMax, deductible)</li>
+<li><strong>Purpose</strong>: Apply copay when deductible also being applied</li>
+<li><strong>Main Method</strong>: <code>process(context)</code></li>
+<li><strong>Helper Methods</strong>: 7 (6 calculation, 1 utility)</li>
+<li><strong>Routes To</strong>: 3 different handlers based on scenario</li></p>
+<p>---</p>
+<p><h2>2. What is This Handler?</h2></p>
+<p><h3>Definition</h3></p>
+<p>This is a <strong>COMPLEX CALCULATION AND ROUTING HANDLER</strong> that applies copay in scenarios where deductible is also being applied. Unlike <code>CostShareCoPayHandler</code> (which runs when deductible is MET), this handler runs when deductible is NOT yet met.</p>
+<p><h3>The Core Concept</h3></p>
+<p><strong>Scenario: Deductible After Copay</strong></p>
+<p><pre><code class="language-">Member has deductible: $500 remaining
+Today's visit: $150
+Copay: $30
+Plan: Copay applied BEFORE deductible</p>
+<p>Step 1: Apply copay ($30)
+Step 2: Apply remaining $120 to deductible</code></pre></p>
+<p><strong>Key Difference from CostShareCoPayHandler:</strong></p>
+<p><pre><code class="language-">CostShareCoPayHandler:
+  Context: Deductible is MET
+  Question: Apply copay when no deductible left
+  
+DeductibleCoPayHandler:
+  Context: Deductible NOT met
+  Question: Apply copay when deductible being applied</code></pre></p>
+<p><h3>Why This Matters</h3></p>
+<p><strong>Plan Type A: Copay Before Deductible</strong>
+<pre><code class="language-">Service: $150
+Copay: $30
+Deductible: $500 remaining</p>
+<p>Step 1: Member pays $30 copay
+Step 2: Member pays $120 toward deductible
+Total: $150 (member pays 100% until deductible met)</code></pre></p>
+<p><strong>Plan Type B: Deductible Before Copay</strong>
+<pre><code class="language-">Service: $150
+Copay: $30
+Deductible: $500 remaining</p>
+<p>Step 1: Member pays $150 toward deductible
+Step 2: No copay yet (deductible not met)
+Total: $150 (different handler processes this)</code></pre></p>
+<p><h3>Context: When This Runs</h3></p>
+<p><strong>This handler runs when:</strong>
+<li>Deductible is NOT met</li>
+<li>Copay applies AFTER deductible (or copay doesn't apply before deductible)</li>
+<li>Service is covered</li></p>
+<p><strong>This handler does NOT run when:</strong>
+<li>Deductible is MET (uses CostShareCoPayHandler instead)</li>
+<li>Copay applies BEFORE deductible (uses different routing)</li>
+<li>Service not covered</li></p>
+<p>---</p>
+<p><h2>3. Handler Overview</h2></p>
+<p><h3>Class Definition</h3></p>
+<p><pre><code class="language-python">class DeductibleCoPayHandler(Handler):
+    """Handles the member co-pay"""</code></pre></p>
+<p><strong>Key Word: "Handles"</strong> - This handler both calculates AND routes.</p>
+<p><h3>Handler Structure</h3></p>
+<p><pre><code class="language-python">class DeductibleCoPayHandler(Handler):
+    # Branch setup methods (3)
+    def set_deductible_oopmax_handler(handler)
+    def set_oopmax_copay_handler(handler)
+    def set_deductible_co_insurance_handler(handler)
+    
+    # Main processing method
+    def process(context) -> InsuranceContext
+    
+    # Utility method
+    def _calculate_min_oopmax(context) -> float or None
+    
+    # Helper calculation methods (6)
+    def _apply_member_pays_remaining_service_amount(context)
+    def _apply_member_pays_no_co_pay(context)
+    def _apply_member_pays_remaining_service_amount_and_oopmax_updated(context)
+    def _apply_member_pays_co_pay_and_oopmax_updated(context)
+    def _apply_member_pays_co_pay_and_oopmax_not_updated(context)
+    def _apply_member_pays_lesser_of_oopmax_oopmax_met_indicator(context)
+    def _apply_costshare_copay_deductible(context)</code></pre></p>
+<p><h3>Handler Responsibilities</h3></p>
+<p><pre><code class="language-">┌──────────────────────────────────────────────────┐
+│ DeductibleCoPayHandler                           │
+├──────────────────────────────────────────────────┤
+│ 1. Check if family/individual OOPMax met        │
+│ 2. Check if copay applies to OOPMax             │
+│ 3. Compare copay vs service cost                │
+│ 4. Apply appropriate copay payment              │
+│ 5. Update OOPMax (if applicable)                │
+│ 6. Update deductible (if copay counts)          │
+│ 7. Route to next handler:                       │
+│    - CoInsuranceHandler                         │
+│    - DeductibleOOPMaxHandler                    │
+│    - OOPMaxCopayHandler                         │
+│ 8. Add trace entries                            │
+└──────────────────────────────────────────────────┘</code></pre></p>
+<p>---</p>
+<p><h2>4. Complete Code Structure</h2></p>
+<p><h3>Full Code (271 Lines)</h3></p>
+<p><pre><code class="language-python">from app.core.base import Handler, InsuranceContext</p>
+<p>class DeductibleCoPayHandler(Handler):
+    """Handles the member co-pay"""</p>
+<p>    # Setup methods (3)
+    def set_deductible_oopmax_handler(handler)
+    def set_oopmax_copay_handler(handler)
+    def set_deductible_co_insurance_handler(handler)</p>
+<p>    def process(self, context):
+        # Check 1: Family OOPMax met?
+        if oopmax_family == 0:
+            return _apply_member_pays_no_co_pay(context)
+        
+        # Check 2: Individual OOPMax met?
+        if oopmax_individual == 0:
+            return _apply_member_pays_no_co_pay(context)
+        
+        # Branch A: Copay does NOT apply to OOPMax
+        if not context.copay_applies_oop:
+            if copay > service:
+                return _apply_member_pays_remaining_service_amount(context)
+            else:
+                context = _apply_member_pays_co_pay_and_oopmax_not_updated(context)
+                # Route based on order and flags
+                
+        # Branch B: Copay DOES apply to OOPMax
+        else:
+            if copay > service:
+                min_oopmax = _calculate_min_oopmax(context)
+                if service < min_oopmax:
+                    return _apply_member_pays_remaining_service_amount_and_oopmax_updated(context)
+                else:
+                    context = _apply_member_pays_lesser_of_oopmax_oopmax_met_indicator(context)
+                    return oopmax_copay_handler.handle(context)
+            else:
+                if copay >= both_oopmax:
+                    context = _apply_member_pays_lesser_of_oopmax_oopmax_met_indicator(context)
+                    return oopmax_copay_handler.handle(context)
+                else:
+                    context = _apply_member_pays_co_pay_and_oopmax_updated(context)
+                    # Route based on order and flags</p>
+<p>    # Helper methods (7)
+    def _apply_member_pays_remaining_service_amount(context)
+    def _apply_member_pays_no_co_pay(context)
+    def _apply_member_pays_remaining_service_amount_and_oopmax_updated(context)
+    def _apply_member_pays_co_pay_and_oopmax_updated(context)
+    def _apply_member_pays_co_pay_and_oopmax_not_updated(context)
+    def _apply_member_pays_lesser_of_oopmax_oopmax_met_indicator(context)
+    def _apply_costshare_copay_deductible(context)
+    def _calculate_min_oopmax(context)</code></pre></p>
+<p>---</p>
+<p><h2>5. Main Method: process()</h2></p>
+<p><h3>Method Signature (Line 19)</h3></p>
+<p><pre><code class="language-python">def process(self, context):</code></pre></p>
+<p><strong>Input:</strong> InsuranceContext with:
+<li><code>cost_share_copay</code>: Copay amount</li>
+<li><code>service_amount</code>: Service cost</li>
+<li><code>copay_applies_oop</code>: Flag if copay counts toward OOPMax</li>
+<li><code>oopmax_individual_calculated</code>: Remaining individual OOPMax</li>
+<li><code>oopmax_family_calculated</code>: Remaining family OOPMax</li>
+<li><code>is_deductible_before_copay</code>: Order flag</li>
+<li><code>copay_count_to_deductible</code>: Flag if copay reduces deductible</li>
+<li><code>accum_code</code>: List of accumulator codes</li>
+<li><code>accum_level</code>: List of accumulator levels</li></p>
+<p><strong>Output:</strong> Modified InsuranceContext with copay applied and routed</p>
+<p><h3>Processing Flow</h3></p>
+<p><pre><code class="language-">1. Check if family OOPMax = 0
+   YES → No copay, complete
+   NO → Continue</p>
+<p><li>Check if individual OOPMax = 0</li>
+   YES → No copay, complete
+   NO → Continue</p>
+<p><li>Check if copay applies to OOPMax</li>
+   NO → Branch A (copay doesn't affect OOPMax)
+   YES → Branch B (copay affects OOPMax)</p>
+<p><li>Branch A:</li>
+   - Compare copay vs service
+   - Apply copay (no OOPMax update)
+   - Route based on order/flags</p>
+<p><li>Branch B:</li>
+   - Compare copay vs service
+   - Compare to OOPMax
+   - Apply copay (update OOPMax)
+   - Route based on result</code></pre></p>
+<p><h3>Step-by-Step Breakdown</h3></p>
+<p><h4><strong>Step 1: Check Family OOPMax (Lines 21-27)</strong></h4></p>
+<p><pre><code class="language-python">if (
+    "oopmax" in context.accum_code
+    and "oopmax_family" in context.accum_level
+    and context.oopmax_family_calculated == 0
+):
+    context.trace_decision("Process", "The family OOPMax is zero", True)
+    return self._apply_member_pays_no_co_pay(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Is family OOPMax already met?</li>
+<li>If yes: Member pays $0 for copay</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">oopmax_family_calculated = 0 (MET!)</p>
+<p>Result: No copay, calculation complete</code></pre></p>
+<p>---</p>
+<p><h4><strong>Step 2: Check Individual OOPMax (Lines 29-36)</strong></h4></p>
+<p><pre><code class="language-python">if (
+    "oopmax" in context.accum_code
+    and "oopmax_individual" in context.accum_level
+    and context.oopmax_individual_calculated == 0
+):
+    context.trace_decision("Process", "The individual OOPMax is zero", True)
+    return self._apply_member_pays_no_co_pay(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Is individual OOPMax already met?</li>
+<li>If yes: Member pays $0 for copay</li></p>
+<p>---</p>
+<p><h4><strong>Step 3: Branch A - Copay Does NOT Apply to OOPMax (Lines 38-65)</strong></h4></p>
+<p><pre><code class="language-python">if not context.copay_applies_oop:
+    context.trace_decision("Process", "Co-pay is not applied to OOP", False)
+    
+    # Check if copay > service
+    if context.cost_share_copay > context.service_amount:
+        # Member pays service (less than copay)
+        return self._apply_member_pays_remaining_service_amount(context)
+    else:
+        # Member pays copay (OOPMax NOT updated)
+        context = self._apply_member_pays_co_pay_and_oopmax_not_updated(context)
+        
+        # Route based on deductible order
+        if context.is_deductible_before_copay:
+            return self._deductible_co_insurance_handler.handle(context)
+        else:
+            # Check if copay counts toward deductible
+            if context.copay_count_to_deductible:
+                context = self._apply_costshare_copay_deductible(context)
+            return self._deductible_oopmax_handler.handle(context)</code></pre></p>
+<p><strong>Logic:</strong>
+<li>Copay does NOT count toward OOPMax (rare)</li>
+<li>Compare copay to service</li>
+<li>Apply appropriate payment</li>
+<li>Route based on deductible order and copay-to-deductible flag</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Rare plan</h1>
+copay_applies_oop = False
+cost_share_copay = 30.00
+service_amount = 150.00</p>
+<p>Route: Apply copay, OOPMax unchanged, continue to coinsurance</code></pre></p>
+<p>---</p>
+<p><h4><strong>Step 4: Branch B - Copay DOES Apply to OOPMax (Lines 67-117)</strong></h4></p>
+<p>This is the most complex branch with multiple sub-paths.</p>
+<p><strong>Sub-Branch B1: Copay > Service (Lines 69-87)</strong></p>
+<p><pre><code class="language-python">if context.cost_share_copay > context.service_amount:
+    min_oopmax = self._calculate_min_oopmax(context)
+    
+    # Check if service < OOPMax
+    if min_oopmax is not None and context.service_amount < min_oopmax:
+        # Service won't cause OOPMax to be met
+        return self._apply_member_pays_remaining_service_amount_and_oopmax_updated(context)
+    else:
+        # Service >= OOPMax: OOPMax will be met
+        context = self._apply_member_pays_lesser_of_oopmax_oopmax_met_indicator(context)
+        return self._oopmax_co_pay_handler.handle(context)</code></pre></p>
+<p><strong>Logic:</strong>
+<li>Copay > service (e.g., $30 copay, $20 service)</li>
+<li>Member pays service amount</li>
+<li>Check if this causes OOPMax to be met</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">cost_share_copay = 30.00
+service_amount = 20.00
+oopmax_individual_calculated = 1000.00</p>
+<p>Member pays: $20 (not $30)
+OOPMax: $980 remaining
+Result: Complete</code></pre></p>
+<p>---</p>
+<p><strong>Sub-Branch B2: Copay <= Service (Lines 89-117)</strong></p>
+<p><pre><code class="language-python">else:
+    # Copay <= service (standard)
+    
+    # Check if copay >= both OOPMax values
+    if (
+        context.oopmax_individual_calculated is not None
+        and context.oopmax_family_calculated is not None
+        and context.cost_share_copay > context.oopmax_individual_calculated
+        and context.cost_share_copay > context.oopmax_family_calculated
+    ):
+        # Copay >= OOPMax: OOPMax will be met
+        context = self._apply_member_pays_lesser_of_oopmax_oopmax_met_indicator(context)
+        return self._oopmax_co_pay_handler.handle(context)
+    else:
+        # Standard: Apply copay, update OOPMax
+        context = self._apply_member_pays_co_pay_and_oopmax_updated(context)
+        
+        # Route based on deductible order
+        if context.is_deductible_before_copay:
+            return self._deductible_co_insurance_handler.handle(context)
+        else:
+            # Check if copay counts toward deductible
+            if context.copay_count_to_deductible:
+                context = self._apply_costshare_copay_deductible(context)
+            return self._deductible_oopmax_handler.handle(context)</code></pre></p>
+<p><strong>Logic:</strong>
+<li>Copay <= service (standard)</li>
+<li>Check if copay causes OOPMax to be met</li>
+<li>Apply copay and update OOPMax</li>
+<li>Route based on deductible order</li></p>
+<p>---</p>
+<p><h2>6. Helper Methods Explained</h2></p>
+<p><h3>Method 1: _apply_member_pays_remaining_service_amount() (Lines 119-130)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_remaining_service_amount(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays remaining service amount and its not applied to individual/family OOPMax"""
+    
+    context.member_pays = context.member_pays + context.service_amount
+    context.service_amount = 0.0
+    context.calculation_complete = True
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Member pays full service (copay > service, copay doesn't apply to OOPMax)</p>
+<p><strong>What Happens:</strong>
+<li>Member pays service amount</li>
+<li>Service set to 0</li>
+<li>OOPMax NOT updated</li>
+<li>Calculation complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+cost_share_copay = 30.00
+service_amount = 20.00
+member_pays = 0</p>
+<p><h1>After</h1>
+member_pays = 20.00
+service_amount = 0
+calculation_complete = True</p>
+<p>Note: OOPMax unchanged, copay unused</code></pre></p>
+<p>---</p>
+<p><h3>Method 2: _apply_member_pays_no_co_pay() (Lines 132-142)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_no_co_pay(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays no co-pay. No other cost sharing"""
+    
+    # context.member_pays = 0  # COMMENTED OUT
+    context.calculation_complete = True
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> When OOPMax is met, no copay applies</p>
+<p><strong>What Happens:</strong>
+<li>Nothing updated (member already paid via previous handlers)</li>
+<li>Calculation complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>OOPMax met</h1>
+oopmax_individual_calculated = 0</p>
+<p>Result: No copay, complete</code></pre></p>
+<p>---</p>
+<p><h3>Method 3: _apply_member_pays_remaining_service_amount_and_oopmax_updated() (Lines 144-164)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_remaining_service_amount_and_oopmax_updated(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays remaining service amount and individual/family OOPMax updated"""
+    
+    context.member_pays = context.member_pays + context.service_amount
+    
+    # Update OOPMax
+    if context.oopmax_family_calculated is not None:
+        context.oopmax_family_calculated -= context.service_amount
+    if context.oopmax_individual_calculated is not None:
+        context.oopmax_individual_calculated -= context.service_amount
+    
+    context.service_amount = 0.0
+    context.calculation_complete = True
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Member pays full service (copay > service, copay DOES apply to OOPMax)</p>
+<p><strong>What Happens:</strong>
+<li>Member pays service amount</li>
+<li>OOPMax reduced by service amount</li>
+<li>Service set to 0</li>
+<li>Calculation complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+cost_share_copay = 30.00
+service_amount = 20.00
+oopmax_individual_calculated = 1000.00</p>
+<p><h1>After</h1>
+member_pays = 20.00
+oopmax_individual_calculated = 980.00
+service_amount = 0
+calculation_complete = True</code></pre></p>
+<p>---</p>
+<p><h3>Method 4: _apply_member_pays_co_pay_and_oopmax_updated() (Lines 166-184)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_co_pay_and_oopmax_updated(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays co-pay amount and its applied to individual/family OOPMax updated"""
+    
+    context.member_pays = context.member_pays + context.cost_share_copay
+    context.service_amount = context.service_amount - context.cost_share_copay
+    
+    context.amount_copay = context.cost_share_copay
+    
+    # Update OOPMax
+    if context.oopmax_family_calculated is not None:
+        context.oopmax_family_calculated -= context.cost_share_copay
+    if context.oopmax_individual_calculated is not None:
+        context.oopmax_individual_calculated -= context.cost_share_copay
+    
+    context.cost_share_copay = 0.0
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Standard copay application with OOPMax update</p>
+<p><strong>What Happens:</strong>
+<li>Member pays copay</li>
+<li>Service reduced by copay</li>
+<li>OOPMax reduced by copay</li>
+<li>Copay set to 0 (used)</li>
+<li>Calculation NOT complete (continues)</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+cost_share_copay = 30.00
+service_amount = 150.00
+oopmax_individual_calculated = 1000.00</p>
+<p><h1>After</h1>
+member_pays = 30.00
+service_amount = 120.00
+oopmax_individual_calculated = 970.00
+cost_share_copay = 0
+amount_copay = 30.00</p>
+<p>Next: Route to coinsurance or deductible handler</code></pre></p>
+<p>---</p>
+<p><h3>Method 5: _apply_member_pays_co_pay_and_oopmax_not_updated() (Lines 186-204)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_co_pay_and_oopmax_not_updated(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays co-pay amount and its not applied to individual/family OOPMax updated"""
+    
+    context.member_pays = context.member_pays + context.cost_share_copay
+    context.amount_copay = context.cost_share_copay
+    
+    # Subtract co-pay from service so co-insurance is calculated correctly
+    context.service_amount = context.service_amount - context.cost_share_copay
+    context.cost_share_copay = 0.0
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Apply copay WITHOUT updating OOPMax (rare)</p>
+<p><strong>What Happens:</strong>
+<li>Member pays copay</li>
+<li>Service reduced by copay</li>
+<li>OOPMax NOT updated</li>
+<li>Copay set to 0</li>
+<li>Calculation NOT complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Rare plan</h1>
+copay_applies_oop = False
+cost_share_copay = 30.00
+service_amount = 150.00
+oopmax_individual_calculated = 1000.00</p>
+<p><h1>After</h1>
+member_pays = 30.00
+service_amount = 120.00
+oopmax_individual_calculated = 1000.00 (UNCHANGED!)
+cost_share_copay = 0</p>
+<p>Next: Route to next handler</code></pre></p>
+<p>---</p>
+<p><h3>Method 6: _apply_member_pays_lesser_of_oopmax_oopmax_met_indicator() (Lines 206-235)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_lesser_of_oopmax_oopmax_met_indicator(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays lesser of the OOPMax and OOPMax is met"""
+    
+    min_oopmax = self._calculate_min_oopmax(context)
+    
+    if min_oopmax is not None:
+        context.member_pays = context.member_pays + min_oopmax
+        context.amount_copay = context.amount_copay + min_oopmax
+        context.cost_share_copay = context.cost_share_copay - min_oopmax
+        context.service_amount = context.service_amount - min_oopmax
+        
+        # Update both individual and family
+        if context.oopmax_family_calculated is not None:
+            context.oopmax_family_calculated -= min_oopmax
+        if context.oopmax_individual_calculated is not None:
+            context.oopmax_individual_calculated -= min_oopmax
+    else:
+        # No OOPMax values
+        context.calculation_complete = True
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Handle when copay/service causes OOPMax to be met</p>
+<p><strong>What Happens:</strong>
+<li>Member pays OOPMax amount (not full copay)</li>
+<li>OOPMax set to 0</li>
+<li>Copay reduced by OOPMax</li>
+<li>Service reduced by OOPMax</li>
+<li>Continues to OOPMaxCopayHandler</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+cost_share_copay = 30.00
+service_amount = 150.00
+oopmax_individual_calculated = 20.00</p>
+<p><h1>Calculate</h1>
+min_oopmax = 20.00</p>
+<p><h1>After</h1>
+member_pays = 20.00
+cost_share_copay = 10.00 (reduced)
+service_amount = 130.00
+oopmax_individual_calculated = 0 (MET!)</p>
+<p>Next: OOPMaxCopayHandler (check if copay continues)</code></pre></p>
+<p>---</p>
+<p><h3>Method 7: _apply_costshare_copay_deductible() (Lines 237-250)</h3></p>
+<p><pre><code class="language-python">def _apply_costshare_copay_deductible(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Apply cost share copay deductible"""
+    
+    if context.deductible_individual_calculated is not None:
+        context.deductible_individual_calculated -= context.amount_copay
+    if context.deductible_family_calculated is not None:
+        context.deductible_family_calculated -= context.amount_copay
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Reduce deductible by copay amount (when copay counts toward deductible)</p>
+<p><strong>What Happens:</strong>
+<li>Deductible reduced by copay</li>
+<li>Used when <code>copay_count_to_deductible = True</code></li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+amount_copay = 30.00
+deductible_individual_calculated = 500.00</p>
+<p><h1>After</h1>
+deductible_individual_calculated = 470.00</p>
+<p>Note: Copay payment reduces deductible remaining</code></pre></p>
+<p>---</p>
+<p><h3>Method 8: _calculate_min_oopmax() (Lines 252-270)</h3></p>
+<p><pre><code class="language-python">def _calculate_min_oopmax(self, context):
+    """Calculate minimum OOP max value handling None cases properly"""
+    
+    if (
+        context.oopmax_individual_calculated is not None
+        and context.oopmax_family_calculated is not None
+    ):
+        # Both exist: use minimum
+        return min(
+            context.oopmax_individual_calculated, context.oopmax_family_calculated
+        )
+    elif context.oopmax_individual_calculated is not None:
+        # Only individual
+        return context.oopmax_individual_calculated
+    elif context.oopmax_family_calculated is not None:
+        # Only family
+        return context.oopmax_family_calculated
+    else:
+        # Neither
+        return None</code></pre></p>
+<p><strong>Purpose:</strong> Find limiting OOPMax value</p>
+<p>---</p>
+<p><h2>7. Key Concept: Copay with Deductible</h2></p>
+<p><h3>Understanding the Timing</h3></p>
+<p><strong>Two Timing Scenarios:</strong></p>
+<p><strong>Scenario A: Copay BEFORE Deductible</strong>
+<pre><code class="language-">Order: Copay → Deductible → Coinsurance</p>
+<p>Service: $150
+Copay: $30
+Deductible: $500 remaining</p>
+<p>Step 1: Apply copay ($30)
+  Member pays: $30
+  Remaining: $120</p>
+<p>Step 2: Apply to deductible ($120)
+  Member pays: $120 more
+  Deductible: $380 remaining</p>
+<p>Total member pays: $150 (until deductible met)</code></pre></p>
+<p><strong>Scenario B: Deductible BEFORE Copay</strong>
+<pre><code class="language-">Order: Deductible → Copay → Coinsurance</p>
+<p>Service: $150
+Copay: $30
+Deductible: $500 remaining</p>
+<p>Step 1: Apply to deductible ($150)
+  Member pays: $150
+  Deductible: $350 remaining</p>
+<p>Step 2: No copay yet (service fully applied to deductible)</p>
+<p>Total member pays: $150</code></pre></p>
+<p><h3>copay_count_to_deductible Flag</h3></p>
+<p><strong>When True:</strong>
+<pre><code class="language-">Copay: $30
+Deductible: $500 remaining</p>
+<p>After copay applied:
+  Member pays: $30
+  Deductible: $470 remaining (copay reduces it!)</code></pre></p>
+<p><strong>When False:</strong>
+<pre><code class="language-">Copay: $30
+Deductible: $500 remaining</p>
+<p>After copay applied:
+  Member pays: $30
+  Deductible: $500 remaining (unchanged)</code></pre></p>
+<p>---</p>
+<p><h2>8. Real-World Examples</h2></p>
+<p><h3>Example 1: Standard Copay with Deductible (Copay After Deductible)</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: $500 remaining
+Copay: $30
+OOPMax: $5,000 remaining
+copay_applies_oop = True
+is_deductible_before_copay = True</code></pre></p>
+<p><strong>Service:</strong> $150 doctor visit</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: OOPMax met? NO</h1>
+<h1>Step 2: copay_applies_oop? YES</h1>
+<h1>Step 3: copay > service? NO (30 <= 150)</h1>
+<h1>Step 4: copay >= OOPMax? NO (30 < 5000)</h1></p>
+<p>Route: _apply_member_pays_co_pay_and_oopmax_updated</p>
+<p>member_pays = 30.00
+service_amount = 120.00
+oopmax_individual_calculated = 4970.00
+cost_share_copay = 0</p>
+<p><h1>is_deductible_before_copay = True</h1>
+Route: DeductibleCoInsuranceHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $30 copay
+Remaining: $120 for coinsurance
+OOPMax: $4,970 remaining</code></pre></p>
+<p>---</p>
+<p><h3>Example 2: Copay > Service (Low-Cost Service)</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: $500 remaining
+Copay: $30
+OOPMax: $5,000 remaining
+copay_applies_oop = True</code></pre></p>
+<p><strong>Service:</strong> $15 prescription</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python"><h1>copay > service? YES (30 > 15)</h1>
+min_oopmax = 5000
+<h1>service < min_oopmax? YES (15 < 5000)</h1></p>
+<p>Route: _apply_member_pays_remaining_service_amount_and_oopmax_updated</p>
+<p>member_pays = 15.00
+service_amount = 0
+oopmax_individual_calculated = 4985.00
+calculation_complete = True</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $15 (full service, not $30 copay)
+OOPMax: $4,985 remaining
+Calculation: COMPLETE</code></pre></p>
+<p>---</p>
+<p><h3>Example 3: Copay Causes OOPMax to be Met</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: $500 remaining
+Copay: $30
+OOPMax: $20 remaining (almost met!)
+copay_applies_oop = True</code></pre></p>
+<p><strong>Service:</strong> $150</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python"><h1>copay > service? NO (30 <= 150)</h1>
+<h1>copay >= both OOPMax? YES (30 > 20)</h1></p>
+<p>Route: _apply_member_pays_lesser_of_oopmax_oopmax_met_indicator</p>
+<p>min_oopmax = 20
+member_pays = 20.00
+cost_share_copay = 10.00 (reduced from 30)
+service_amount = 130.00
+oopmax_individual_calculated = 0 (MET!)</p>
+<p>Route: OOPMaxCopayHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $20 (OOPMax limit)
+OOPMax: MET!
+Copay: $10 remaining
+Service: $130 remaining
+Next: Check if copay continues after OOPMax</code></pre></p>
+<p>---</p>
+<p><h3>Example 4: Copay Does NOT Apply to OOPMax (Rare)</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: $500 remaining
+Copay: $30
+OOPMax: $5,000 remaining
+copay_applies_oop = False (RARE!)
+is_deductible_before_copay = True</code></pre></p>
+<p><strong>Service:</strong> $150</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python"><h1>copay_applies_oop? NO</h1></p>
+<p>Route: _apply_member_pays_co_pay_and_oopmax_not_updated</p>
+<p>member_pays = 30.00
+service_amount = 120.00
+oopmax_individual_calculated = 5000.00 (UNCHANGED!)
+cost_share_copay = 0</p>
+<p><h1>is_deductible_before_copay = True</h1>
+Route: DeductibleCoInsuranceHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $30 copay
+OOPMax: $5,000 remaining (NO CHANGE!)
+Service: $120 remaining</code></pre></p>
+<p>---</p>
+<p><h3>Example 5: Copay Counts Toward Deductible</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Deductible: $500 remaining
+Copay: $30
+OOPMax: $5,000 remaining
+copay_applies_oop = True
+is_deductible_before_copay = False
+copay_count_to_deductible = True</code></pre></p>
+<p><strong>Service:</strong> $150</p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python"><h1>Apply copay</h1>
+member_pays = 30.00
+service_amount = 120.00</p>
+<p><h1>is_deductible_before_copay = False</h1>
+<h1>copay_count_to_deductible = True</h1></p>
+<p>Route: _apply_costshare_copay_deductible
+deductible_individual_calculated = 470.00 (500 - 30)</p>
+<p>Route: DeductibleOOPMaxHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $30 copay
+Deductible: $470 remaining (reduced by copay!)
+Service: $120 remaining (goes to deductible)</code></pre></p>
+<p>---</p>
+<p><h2>9. Integration with Handler Chain</h2></p>
+<p><h3>How This Handler is Reached</h3></p>
+<p><strong>From DeductibleHandler:</strong></p>
+<p><pre><code class="language-python"><h1>When deductible after copay</h1>
+if not context.is_deductible_before_copay:
+    if context.cost_share_copay > 0:
+        return self._deductible_co_pay_handler.handle(context)</code></pre></p>
+<p><strong>From DeductibleCostShareCoPayHandler:</strong></p>
+<p><pre><code class="language-python"><h1>When copay continues and amount > 0</h1>
+if context.copay_continue_when_deductible_met:
+    if context.cost_share_copay > 0:
+        # May route here</code></pre></p>
+<p><h3>Position in Chain</h3></p>
+<p><pre><code class="language-">1. ServiceCoverageHandler
+<li>BenefitLimitationHandler</li>
+<li>OOPMaxHandler</li>
+<li>DeductibleHandler</li>
+   ↓ (if deductible after copay)
+<li>DeductibleCoPayHandler ← YOU ARE HERE</li>
+   ↓
+   ├─ Route A: DeductibleCoInsuranceHandler
+   ├─ Route B: DeductibleOOPMaxHandler
+   └─ Route C: OOPMaxCopayHandler</code></pre></p>
+<p><h3>Three Routing Options</h3></p>
+<p><strong>Route A: DeductibleCoInsuranceHandler</strong>
+<pre><code class="language-">When: is_deductible_before_copay = True
+Reason: Apply coinsurance to remaining service</code></pre></p>
+<p><strong>Route B: DeductibleOOPMaxHandler</strong>
+<pre><code class="language-">When: is_deductible_before_copay = False
+Reason: Apply remaining to deductible</code></pre></p>
+<p><strong>Route C: OOPMaxCopayHandler</strong>
+<pre><code class="language-">When: OOPMax met during copay
+Reason: Check if copay continues</code></pre></p>
+<p>---</p>
+<p><h2>10. Complete Code Walkthrough</h2></p>
+<p>Due to the length and complexity, I'll focus on key sections:</p>
+<p><h3>Key Decision Points</h3></p>
+<p><strong>Decision Point 1: OOPMax Status (Lines 21-36)</strong>
+<pre><code class="language-python"><h1>Priority 1: Check if OOPMax already met</h1>
+if oopmax_family == 0 or oopmax_individual == 0:
+    No copay, complete</code></pre></p>
+<p><strong>Decision Point 2: Copay Applies to OOPMax (Lines 38-117)</strong>
+<pre><code class="language-python"><h1>Priority 2: Does copay affect OOPMax?</h1>
+if not copay_applies_oop:
+    Branch A: Copay doesn't affect OOPMax
+else:
+    Branch B: Copay affects OOPMax</code></pre></p>
+<p><strong>Decision Point 3: Copay vs Service (Multiple locations)</strong>
+<pre><code class="language-python"><h1>Always check: Is copay > service?</h1>
+if copay > service:
+    Member pays service (not copay)
+else:
+    Member pays copay</code></pre></p>
+<p><strong>Decision Point 4: OOPMax Met Check (Lines 95-106)</strong>
+<pre><code class="language-python"><h1>In Branch B: Will copay cause OOPMax to be met?</h1>
+if copay >= both_oopmax:
+    Apply OOPMax difference
+    Route to OOPMaxCopayHandler
+else:
+    Apply copay
+    Continue</code></pre></p>
+<p><strong>Decision Point 5: Routing (Lines 58-65, 110-117)</strong>
+<pre><code class="language-python"><h1>After copay applied, where to route?</h1>
+if is_deductible_before_copay:
+    Route: CoInsuranceHandler
+else:
+    if copay_count_to_deductible:
+        Reduce deductible by copay
+    Route: DeductibleOOPMaxHandler</code></pre></p>
+<p>---</p>
+<p><h2>11. Decision Tree and Flow</h2></p>
+<p><h3>Complete Decision Tree</h3></p>
+<p><pre><code class="language-">┌──────────────────────────────────────────┐
+│ START: DeductibleCoPayHandler            │
+└──────────────────┬───────────────────────┘
+                   ↓
+          ┌────────────────┐
+          │ Family OOPMax  │
+          │ = 0?           │
+          └────────┬───────┘
+                   │
+            ┌──────┴──────┐
+            │             │
+           YES           NO
+            │             │
+            ↓             ↓
+      [No Copay]  ┌──────────────┐
+      Complete    │Individual    │
+                  │OOPMax = 0?   │
+                  └──────┬───────┘
+                         │
+                  ┌──────┴──────┐
+                  │             │
+                 YES           NO
+                  │             │
+                  ↓             ↓
+            [No Copay]  ┌───────────────┐
+            Complete    │copay_applies_ │
+                        │oop?           │
+                        └───────┬───────┘
+                                │
+                         ┌──────┴──────┐
+                         │             │
+                        NO            YES
+                         │             │
+                         ↓             ↓
+                  [Branch A]    [Branch B]
+                  [No OOPMax]   [Update OOPMax]
+                         │             │
+                    ┌────┴────┐   ┌────┴────┐
+                    │         │   │         │
+              copay>service? copay>service?
+                    │         │   │         │
+                   ...       ... ...       ...
+                    │         │   │         │
+                    └─────────┴───┴─────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+            [Route to         [Route to
+            CoInsurance]      Deductible/OOPMax]</code></pre></p>
+<p>---</p>
+<p><h2>12. Complex Routing Logic</h2></p>
+<p><h3>Routing Decision Table</h3></p>
+<p>| copay_applies_oop | copay vs service | OOPMax status | is_deductible_before_copay | Route To |
+|-------------------|------------------|---------------|---------------------------|----------|
+| False | copay > service | N/A | N/A | <strong>Complete</strong> |
+| False | copay <= service | N/A | True | <strong>CoInsuranceHandler</strong> |
+| False | copay <= service | N/A | False | <strong>DeductibleOOPMaxHandler</strong> |
+| True | copay > service | service < OOPMax | N/A | <strong>Complete</strong> |
+| True | copay > service | service >= OOPMax | N/A | <strong>OOPMaxCopayHandler</strong> |
+| True | copay <= service | copay >= OOPMax | N/A | <strong>OOPMaxCopayHandler</strong> |
+| True | copay <= service | copay < OOPMax | True | <strong>CoInsuranceHandler</strong> |
+| True | copay <= service | copay < OOPMax | False | <strong>DeductibleOOPMaxHandler</strong> |</p>
+<p>---</p>
+<p><h2>Summary</h2></p>
+<p><h3>What We Learned</h3></p>
+<p><li><strong>DeductibleCoPayHandler</strong> applies copay when deductible is being applied</li></p>
+<p><li><strong>Eight Helper Methods:</strong></li>
+   - 6 calculation methods
+   - 1 utility method (_calculate_min_oopmax)
+   - 1 deductible adjustment method</p>
+<p><li><strong>Two Main Branches:</strong></li>
+   - Copay does NOT apply to OOPMax (rare)
+   - Copay DOES apply to OOPMax (standard)</p>
+<p><li><strong>Three Routing Options:</strong></li>
+   - DeductibleCoInsuranceHandler
+   - DeductibleOOPMaxHandler
+   - OOPMaxCopayHandler</p>
+<p><li><strong>Key Flags:</strong></li>
+   - <code>copay_applies_oop</code>: Does copay count toward OOPMax?
+   - <code>is_deductible_before_copay</code>: Order of application
+   - <code>copay_count_to_deductible</code>: Does copay reduce deductible?</p>
+<p><h3>Key Takeaways</h3></p>
+<p>✓ <strong>Complex Handler</strong>: Multiple branches and routing options
+✓ <strong>OOPMax Aware</strong>: Checks if met, updates when applicable
+✓ <strong>Member Protection</strong>: Never pays more than service
+✓ <strong>Flexible Routing</strong>: Three possible next handlers
+✓ <strong>Deductible Integration</strong>: Can reduce deductible by copay
+✓ <strong>Order Handling</strong>: Supports copay before/after deductible</p>
+<p><h3>Real-World Value</h3></p>
+<p><strong>Ensures:</strong>
+<li>Accurate copay application with deductible</li>
+<li>Proper OOPMax tracking</li>
+<li>Correct routing based on plan design</li>
+<li>Deductible properly adjusted</li></p>
+<p><strong>Handles:</strong>
+<li>Standard copay with deductible</li>
+<li>Low-cost services (copay > service)</li>
+<li>OOPMax scenarios</li>
+<li>Rare: copay doesn't count toward OOPMax</li>
+<li>Copay counting toward deductible</li></p>
+<p>---</p>
+<p><strong>End of Deductible CoPay Handler Deep Dive</strong>
+</p>
+    </div>
+    <div class="footer">
+        <p><strong>Deductible CoPay Handler - Technical Documentation</strong></p>
+        <p>© 2025 | Complete Deep Dive of deductible_co_pay_handler.py</p>
+    </div>
+</body>
+</html>
