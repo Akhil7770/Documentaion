@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Convert Service Coverage Handler Deep Dive to HTML for PDF generation."""
+
+import re
+
+def convert_to_html(md_file, html_file):
+    """Convert markdown to styled HTML."""
+    
+    with open(md_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # Process content
+    html_content = content
+    
+    # Convert headers
+    html_content = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html_content, flags=re.MULTILINE)
+    html_content = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html_content, flags=re.MULTILINE)
+    html_content = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', html_content, flags=re.MULTILINE)
+    html_content = re.sub(r'^#### (.*?)$', r'<h4>\1</h4>', html_content, flags=re.MULTILINE)
+    
+    # Convert bold
+    html_content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html_content)
+    
+    # Convert code blocks
+    html_content = re.sub(
+        r'```(\w+)?\n(.*?)\n```',
+        r'<pre><code class="language-\1">\2</code></pre>',
+        html_content,
+        flags=re.DOTALL
+    )
+    
+    # Convert inline code
+    html_content = re.sub(r'`([^`\n]+)`', r'<code>\1</code>', html_content)
+    
+    # Convert lists
+    html_content = re.sub(r'^- (.*?)$', r'<li>\1</li>', html_content, flags=re.MULTILINE)
+    html_content = re.sub(r'^\d+\. (.*?)$', r'<li>\1</li>', html_content, flags=re.MULTILINE)
+    
+    # Convert paragraphs
+    html_content = re.sub(r'\n\n+', '</p>\n<p>', html_content)
+    
+    # HTML document
+    html_doc = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Service Coverage Handler Deep Dive</title>
+    <style>
+        @page {{
+            margin: 0.75in;
+        }}
+        @media print {{
+            body {{ font-size: 10pt; }}
+            h1 {{ page-break-before: always; margin-top: 0; }}
+            h1:first-of-type {{ page-break-before: auto; }}
+            h2 {{ page-break-before: always; margin-top: 0; }}
+            h2:first-of-type {{ page-break-before: auto; }}
+            pre, table {{ page-break-inside: avoid; }}
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            line-height: 1.7;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #2c3e50;
+        }}
+        .cover {{
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            margin: -40px -20px 60px -20px;
+            padding: 100px 20px;
+            page-break-after: always;
+        }}
+        .cover h1 {{
+            font-size: 3.5em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }}
+        .cover .subtitle {{
+            font-size: 1.8em;
+            margin: 20px 0;
+        }}
+        h1 {{
+            color: #2c3e50;
+            border-bottom: 4px solid #f5576c;
+            padding-bottom: 15px;
+            margin-top: 60px;
+            font-size: 2.5em;
+        }}
+        h2 {{
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 12px;
+            margin-top: 50px;
+            font-size: 2em;
+        }}
+        h3 {{
+            color: #f5576c;
+            margin-top: 35px;
+            font-size: 1.5em;
+        }}
+        h4 {{
+            color: #f093fb;
+            margin-top: 25px;
+            font-size: 1.2em;
+        }}
+        code {{
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: Monaco, 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }}
+        pre {{
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }}
+        pre code {{
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: #f8f8f2;
+        }}
+        table {{
+            border-collapse: collapse;
+            width: 100%;
+            margin: 25px 0;
+        }}
+        th, td {{
+            border: 1px solid #ddd;
+            padding: 14px;
+            text-align: left;
+        }}
+        th {{
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }}
+        tr:nth-child(even) {{
+            background-color: #f8f9fa;
+        }}
+        li {{
+            margin: 10px 0;
+        }}
+        .footer {{
+            margin-top: 80px;
+            padding-top: 30px;
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+        }}
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <h1>Service Coverage Handler</h1>
+        <div class="subtitle">Complete Deep Dive</div>
+        <div class="subtitle">service_coverage_handler.py Explained</div>
+        <div class="version">
+            <p>Handler #1 in Calculation Chain</p>
+            <p>The First and Most Critical Handler</p>
+            <p>Technical Documentation v1.0</p>
+            <p>October 2025</p>
+        </div>
+    </div>
+    <div class="content">
+        <p>{html_content}</p>
+    </div>
+    <div class="footer">
+        <p><strong>Service Coverage Handler - Technical Documentation</strong></p>
+        <p>© 2025 | Complete Deep Dive of service_coverage_handler.py</p>
+    </div>
+</body>
+</html>'''
+    
+    with open(html_file, 'w', encoding='utf-8') as f:
+        f.write(html_doc)
+    
+    print(f"✓ HTML file created: {html_file}")
+    print(f"\n📄 To create PDF:")
+    print(f"   1. Open {html_file} in your browser")
+    print(f"   2. Press Cmd+P (Mac) or Ctrl+P (Windows)")
+    print(f"   3. Select 'Save as PDF'")
+    print(f"   4. Save as: Service_Coverage_Handler_Deep_Dive.pdf")
+    print(f"   5. Done!\n")
+
+if __name__ == "__main__":
+    convert_to_html(
+        "Service_Coverage_Handler_Deep_Dive.md",
+        "Service_Coverage_Handler_Deep_Dive.html"
+    )
