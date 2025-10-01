@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Deductible OOPMax Handler Deep Dive</title>
+    <style>
+        @page {
+            margin: 0.75in;
+        }
+        @media print {
+            body { font-size: 10pt; }
+            h1 { page-break-before: always; margin-top: 0; }
+            h1:first-of-type { page-break-before: auto; }
+            h2 { page-break-before: always; margin-top: 0; }
+            h2:first-of-type { page-break-before: auto; }
+            pre, table { page-break-inside: avoid; }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            line-height: 1.7;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #2c3e50;
+        }
+        .cover {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: -40px -20px 60px -20px;
+            padding: 100px 20px;
+            page-break-after: always;
+        }
+        .cover h1 {
+            font-size: 3.5em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .cover .subtitle {
+            font-size: 1.8em;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #667eea;
+            padding-bottom: 15px;
+            margin-top: 60px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 12px;
+            margin-top: 50px;
+            font-size: 2em;
+        }
+        h3 {
+            color: #667eea;
+            margin-top: 35px;
+            font-size: 1.5em;
+        }
+        h4 {
+            color: #764ba2;
+            margin-top: 25px;
+            font-size: 1.2em;
+        }
+        code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: Monaco, 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        pre code {
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 25px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 14px;
+            text-align: left;
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        li {
+            margin: 10px 0;
+        }
+        .footer {
+            margin-top: 80px;
+            padding-top: 30px;
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <h1>Deductible OOPMax Handler</h1>
+        <div class="subtitle">Complete Deep Dive</div>
+        <div class="subtitle">deductible_oopmax_handler.py</div>
+        <div class="version">
+            <p>Calculation Handler - Applies Deductible & Tracks OOPMax</p>
+            <p>Technical Documentation v1.0</p>
+            <p>October 2025</p>
+        </div>
+    </div>
+    <div class="content">
+        <p><h1>Deductible OOPMax Handler - Complete Deep Dive</h1></p>
+<p><h2>Comprehensive Explanation of <code>deductible_oopmax_handler.py</code></h2></p>
+<p>---</p>
+<p><h2>Table of Contents</h2></p>
+<p><li>[Executive Summary](#executive-summary)</li>
+<li>[What is This Handler?](#what-is-this-handler)</li>
+<li>[Handler Overview](#handler-overview)</li>
+<li>[Complete Code Structure](#complete-code-structure)</li>
+<li>[Main Method: process()](#main-method-process)</li>
+<li>[Helper Methods Explained](#helper-methods-explained)</li>
+<li>[Key Concept: Deductible Counts Toward OOPMax](#key-concept-deductible-counts-toward-oopmax)</li>
+<li>[Real-World Examples](#real-world-examples)</li>
+<li>[Integration with Handler Chain](#integration-with-handler-chain)</li>
+<li>[Complete Code Walkthrough](#complete-code-walkthrough)</li>
+<li>[Decision Tree and Flow](#decision-tree-and-flow)</li>
+<li>[Impact and Importance](#impact-and-importance)</li></p>
+<p>---</p>
+<p><h2>1. Executive Summary</h2></p>
+<p><h3>What Does This Handler Do?</h3></p>
+<p>The <strong>Deductible OOPMax Handler</strong> is a <strong>CALCULATION HANDLER</strong> that applies deductible payments and determines if those payments count toward Out-of-Pocket Maximum (OOPMax).</p>
+<p><strong>Core Questions:</strong>
+<li>"How much of the service goes toward deductible?"</li>
+<li>"Does the deductible payment count toward OOPMax?"</li>
+<li>"Is the service fully covered by deductible or does something remain?"</li></p>
+<p><h3>Position in Handler Chain</h3></p>
+<p><pre><code class="language-">ServiceCoverageHandler
+    ↓
+BenefitLimitationHandler
+    ↓
+OOPMaxHandler
+    ↓
+DeductibleHandler
+    ↓ (when deductible NOT met)
+DeductibleOOPMaxHandler ← YOU ARE HERE
+    ↓
+    ├─ Route A: DeductibleCostShareCoPayHandler (if deductible before copay)
+    └─ Route B: DeductibleCoInsuranceHandler (if deductible after copay)</code></pre></p>
+<p><h3>Key Responsibilities</h3></p>
+<p><li><strong>Check</strong> if deductible applies to OOPMax</li>
+<li><strong>Calculate</strong> member payment (service amount or remaining deductible)</li>
+<li><strong>Update</strong> deductible remaining amounts</li>
+<li><strong>Update</strong> OOPMax remaining amounts (if applicable)</li>
+<li><strong>Route</strong> to next handler or mark complete</li></p>
+<p><h3>Handler Characteristics</h3></p>
+<p><li><strong>File</strong>: <code>deductible_oopmax_handler.py</code></li>
+<li><strong>Lines of Code</strong>: 129 (calculation handler)</li>
+<li><strong>Type</strong>: Calculation + Routing Handler</li>
+<li><strong>Modifies Context</strong>: YES (member_pays, deductible values, OOPMax values)</li>
+<li><strong>Purpose</strong>: Apply deductible and manage OOPMax tracking</li>
+<li><strong>Main Method</strong>: <code>process(context)</code></li>
+<li><strong>Helper Methods</strong>: 2 calculation methods</li></p>
+<p>---</p>
+<p><h2>2. What is This Handler?</h2></p>
+<p><h3>Definition</h3></p>
+<p>This is a <strong>CALCULATION HANDLER</strong> that applies deductible payments when deductible has NOT been met. It performs calculations AND routes to the next appropriate handler.</p>
+<p><h3>The Core Concept</h3></p>
+<p><strong>What happens when service applies to deductible?</strong></p>
+<p><pre><code class="language-">Member has deductible: $500 remaining
+Service: $200</p>
+<p>Member pays: $200 (goes toward deductible)
+Remaining deductible: $300</p>
+<p>Question: Does this $200 also count toward OOPMax?
+  Option A: YES (deductible_applies_oop = True)
+  Option B: NO (deductible_applies_oop = False)</code></pre></p>
+<p><h3>Why This Matters</h3></p>
+<p><strong>Scenario A: Deductible counts toward OOPMax</strong>
+<pre><code class="language-">Deductible remaining: $500
+OOPMax remaining: $5,000
+Service: $200</p>
+<p>Member pays: $200
+New deductible: $300
+New OOPMax: $4,800 (reduced by $200)</code></pre></p>
+<p><strong>Scenario B: Deductible does NOT count toward OOPMax</strong>
+<pre><code class="language-">Deductible remaining: $500
+OOPMax remaining: $5,000
+Service: $200</p>
+<p>Member pays: $200
+New deductible: $300
+New OOPMax: $5,000 (unchanged)</code></pre></p>
+<p><h3>Two Key Scenarios</h3></p>
+<p><strong>Scenario 1: Service < Deductible</strong>
+<pre><code class="language-">Service: $200
+Deductible remaining: $500</p>
+<p>Member pays: $200 (full service)
+Service amount: $0
+Calculation: COMPLETE</code></pre></p>
+<p><strong>Scenario 2: Service >= Deductible</strong>
+<pre><code class="language-">Service: $700
+Deductible remaining: $500</p>
+<p>Member pays: $500 (deductible)
+Service amount: $200 (remaining)
+Calculation: NOT complete (continue to copay/coinsurance)</code></pre></p>
+<p>---</p>
+<p><h2>3. Handler Overview</h2></p>
+<p><h3>Class Definition</h3></p>
+<p><pre><code class="language-python">class DeductibleOOPMaxHandler(Handler):
+    """Handles logic for OOPMax calculations for deductibles"""</code></pre></p>
+<p><strong>Key Words: "Handles logic" and "calculations"</strong> - This handler both calculates AND routes.</p>
+<p><h3>Handler Structure</h3></p>
+<p><pre><code class="language-python">class DeductibleOOPMaxHandler(Handler):
+    # Branch setup methods (2)
+    def set_deductible_co_insurance_handler(handler)
+    def set_deductible_cost_share_co_pay_handler(handler)
+    
+    # Main processing method
+    def process(context) -> InsuranceContext
+    
+    # Helper calculation methods (2)
+    def _apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax(context)
+    def _apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax(context)</code></pre></p>
+<p><h3>Handler Responsibilities</h3></p>
+<p><pre><code class="language-">┌──────────────────────────────────────────────────┐
+│ DeductibleOOPMaxHandler                          │
+├──────────────────────────────────────────────────┤
+│ 1. Check if deductible applies to OOPMax        │
+│ 2. Calculate member payment:                    │
+│    - Service < Deductible → Member pays service │
+│    - Service >= Deductible → Member pays deduct.│
+│ 3. Update deductible remaining amounts          │
+│ 4. Update OOPMax remaining (if applicable)      │
+│ 5. Mark complete or route to next handler       │
+│ 6. Add trace entries                            │
+└──────────────────────────────────────────────────┘</code></pre></p>
+<p>---</p>
+<p><h2>4. Complete Code Structure</h2></p>
+<p><h3>Full Code (129 Lines)</h3></p>
+<p><pre><code class="language-python">from app.core.base import Handler, InsuranceContext</p>
+<p>class DeductibleOOPMaxHandler(Handler):
+    """Handles logic for OOPMax calculations for deductibles"""</p>
+<p>    def set_deductible_co_insurance_handler(self, handler):
+        self._deductible_co_insurance_handler = handler
+        return handler</p>
+<p>    def set_deductible_cost_share_co_pay_handler(self, handler):
+        self._deductible_cost_share_co_pay_handler = handler
+        return handler</p>
+<p>    def process(self, context):
+        # Check if already complete
+        if context.calculation_complete:
+            context.trace("Process", "Calculation should not be marked as complete yet!!")</p>
+<p>        # Check if deductible applies to OOPMax
+        if context.deductible_applies_oop:
+            context = self._apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax(context)
+        else:
+            context = self._apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax(context)</p>
+<p>        # If complete, return
+        if context.calculation_complete:
+            return context</p>
+<p>        # Otherwise, route to next handler
+        if context.is_deductible_before_copay:
+            return self._deductible_cost_share_co_pay_handler.handle(context)
+        else:
+            return self._deductible_co_insurance_handler.handle(context)</p>
+<p>    def _apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Member pays lesser of the service or Individual Deductible and it will not count towards OOPMax"""
+        
+        if (
+            context.deductible_individual_calculated is not None
+            and context.service_amount < context.deductible_individual_calculated
+        ):
+            # Service < Deductible: Member pays full service
+            context.member_pays += context.service_amount
+            if context.deductible_family_calculated is not None:
+                context.deductible_family_calculated -= context.service_amount
+            context.deductible_individual_calculated -= context.service_amount
+            context.service_amount = 0
+            context.calculation_complete = True
+            
+        elif context.deductible_individual_calculated is not None:
+            # Service >= Deductible: Member pays remaining deductible
+            context.member_pays += context.deductible_individual_calculated
+            if context.deductible_family_calculated is not None:
+                context.deductible_family_calculated -= context.deductible_individual_calculated
+            context.service_amount -= context.deductible_individual_calculated
+            context.deductible_individual_calculated = 0</p>
+<p>        return context</p>
+<p>    def _apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Member pays lesser of the service or individual deductible and it will get counted towards individual and family OOPMax"""
+        
+        if (
+            context.deductible_individual_calculated is not None
+            and context.service_amount < context.deductible_individual_calculated
+        ):
+            # Service < Deductible: Member pays full service, counts toward OOPMax
+            context.member_pays += context.service_amount
+            if context.oopmax_family_calculated is not None:
+                context.oopmax_family_calculated -= context.service_amount
+            if context.oopmax_individual_calculated is not None:
+                context.oopmax_individual_calculated -= context.service_amount
+            if context.deductible_family_calculated is not None:
+                context.deductible_family_calculated -= context.service_amount
+            if context.deductible_individual_calculated is not None:
+                context.deductible_individual_calculated -= context.service_amount
+            context.service_amount = 0
+            context.calculation_complete = True
+            
+        elif context.deductible_individual_calculated is not None:
+            # Service >= Deductible: Member pays remaining deductible, counts toward OOPMax
+            context.member_pays += context.deductible_individual_calculated
+            if context.deductible_family_calculated is not None:
+                context.deductible_family_calculated -= context.deductible_individual_calculated
+            if context.oopmax_family_calculated is not None:
+                context.oopmax_family_calculated -= context.deductible_individual_calculated
+            if context.oopmax_individual_calculated is not None:
+                context.oopmax_individual_calculated -= context.deductible_individual_calculated
+            context.service_amount -= context.deductible_individual_calculated
+            context.deductible_individual_calculated = 0</p>
+<p>        return context</code></pre></p>
+<p>---</p>
+<p><h2>5. Main Method: process()</h2></p>
+<p><h3>Method Signature (Line 15)</h3></p>
+<p><pre><code class="language-python">def process(self, context):</code></pre></p>
+<p><strong>Input:</strong> InsuranceContext with:
+<li><code>deductible_applies_oop</code>: Boolean flag</li>
+<li><code>deductible_individual_calculated</code>: Remaining deductible</li>
+<li><code>deductible_family_calculated</code>: Remaining family deductible</li>
+<li><code>oopmax_individual_calculated</code>: Remaining individual OOPMax</li>
+<li><code>oopmax_family_calculated</code>: Remaining family OOPMax</li>
+<li><code>service_amount</code>: Service cost</li>
+<li><code>is_deductible_before_copay</code>: Routing flag</li></p>
+<p><strong>Output:</strong> Modified InsuranceContext with:
+<li><code>member_pays</code>: Updated with deductible payment</li>
+<li>Deductible values: Reduced</li>
+<li>OOPMax values: Reduced (if applies)</li>
+<li><code>calculation_complete</code>: Set if service fully covered by deductible</li></p>
+<p><h3>Processing Flow</h3></p>
+<p><pre><code class="language-">1. Check if already complete (safety check)
+   
+<li>Check if deductible applies to OOPMax</li>
+   YES → Call helper that updates OOPMax
+   NO → Call helper that doesn't update OOPMax
+   
+<li>Check if calculation complete</li>
+   YES → Return (stop)
+   NO → Route to next handler
+   
+<li>Route based on is_deductible_before_copay</li>
+   TRUE → DeductibleCostShareCoPayHandler
+   FALSE → DeductibleCoInsuranceHandler</code></pre></p>
+<p><h3>Step-by-Step Breakdown</h3></p>
+<p><h4><strong>Step 1: Safety Check (Lines 17-20)</strong></h4></p>
+<p><pre><code class="language-python">if context.calculation_complete:
+    context.trace(
+        "Process", "Calculation should not be marked as complete yet!!"
+    )</code></pre></p>
+<p><strong>What This Does:</strong>
+<li>Checks if calculation is already marked complete</li>
+<li>Logs a trace if it is (shouldn't happen)</li>
+<li>Defensive programming</li></p>
+<p><strong>Why This Matters:</strong>
+<li>Catches unexpected state</li>
+<li>Helps debug issues</li>
+<li>Doesn't stop processing (just logs)</li></p>
+<p><h4><strong>Step 2: Check if Deductible Applies to OOPMax (Lines 22-33)</strong></h4></p>
+<p><pre><code class="language-python">if context.deductible_applies_oop:
+    context.trace_decision("Process", "The deductible applies to OOP", True)
+    context = self._apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax(
+        context
+    )
+else:
+    context.trace_decision(
+        "Process", "The deductible does not apply to OOP", False
+    )
+    context = self._apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax(
+        context
+    )</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Does deductible payment count toward OOPMax?</li>
+<li>Based on plan rules</li></p>
+<p><strong>Two Paths:</strong>
+<pre><code class="language-">deductible_applies_oop = True:
+  → Update both deductible AND OOPMax</p>
+<p>deductible_applies_oop = False:
+  → Update only deductible (NOT OOPMax)</code></pre></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Deductible counts toward OOPMax (common)</h1>
+context.deductible_applies_oop = True
+Result: Payment reduces both deductible and OOPMax</p>
+<p><h1>Deductible does NOT count (rare)</h1>
+context.deductible_applies_oop = False
+Result: Payment reduces only deductible</code></pre></p>
+<p><h4><strong>Step 3: Check if Complete (Lines 35-36)</strong></h4></p>
+<p><pre><code class="language-python">if context.calculation_complete:
+    return context</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Did the helper method mark calculation as complete?</li>
+<li>Happens when service_amount becomes 0</li></p>
+<p><strong>When Complete:</strong>
+<li>Service was fully covered by deductible</li>
+<li>No remaining amount</li>
+<li>Stop processing</li></p>
+<p><h4><strong>Step 4: Route to Next Handler (Lines 38-47)</strong></h4></p>
+<p><pre><code class="language-python">if context.is_deductible_before_copay:
+    context.trace_decision("Process", "The deductible is before co-pay", True)
+    return self._deductible_cost_share_co_pay_handler.handle(context)
+else:
+    context.trace_decision(
+        "Process",
+        "The deductible is after co-pay, so checking for coinsurance",
+        False,
+    )
+    return self._deductible_co_insurance_handler.handle(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Order of deductible vs copay</li>
+<li>Determines next handler</li></p>
+<p><strong>Routing:</strong>
+<pre><code class="language-">is_deductible_before_copay = True:
+  → DeductibleCostShareCoPayHandler
+  (Determines copay vs coinsurance)</p>
+<p>is_deductible_before_copay = False:
+  → DeductibleCoInsuranceHandler
+  (Apply coinsurance directly)</code></pre></p>
+<p>---</p>
+<p><h2>6. Helper Methods Explained</h2></p>
+<p><h3>Method 1: _apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax() (Lines 49-81)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays lesser of the service or Individual Deductible and it will not count towards OOPMax"""</code></pre></p>
+<p><strong>Purpose:</strong> Apply deductible WITHOUT counting toward OOPMax</p>
+<p><strong>Two Scenarios:</strong></p>
+<p><strong>Scenario A: Service < Deductible (Lines 54-64)</strong>
+<pre><code class="language-python">if (
+    context.deductible_individual_calculated is not None
+    and context.service_amount < context.deductible_individual_calculated
+):
+    context.member_pays += context.service_amount
+    if context.deductible_family_calculated is not None:
+        context.deductible_family_calculated -= context.service_amount
+    context.deductible_individual_calculated -= context.service_amount
+    context.service_amount = 0
+    
+    context.calculation_complete = True</code></pre></p>
+<p><strong>What Happens:</strong>
+<li>Member pays full service amount</li>
+<li>Reduce family deductible (if exists)</li>
+<li>Reduce individual deductible</li>
+<li>Set service_amount to 0</li>
+<li>Mark calculation complete (nothing left to process)</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+service_amount = 200.00
+deductible_individual_calculated = 500.00
+member_pays = 0.00</p>
+<p><h1>After</h1>
+member_pays = 200.00
+deductible_individual_calculated = 300.00
+service_amount = 0.00
+calculation_complete = True</p>
+<p>Note: OOPMax values UNCHANGED</code></pre></p>
+<p><strong>Scenario B: Service >= Deductible (Lines 65-74)</strong>
+<pre><code class="language-python">elif context.deductible_individual_calculated is not None:
+    context.member_pays += context.deductible_individual_calculated
+    if context.deductible_family_calculated is not None:
+        context.deductible_family_calculated -= (
+            context.deductible_individual_calculated
+        )
+    context.service_amount -= context.deductible_individual_calculated
+    context.deductible_individual_calculated = 0
+    
+    # another step, then must go to deductible_co_insurance_handler</code></pre></p>
+<p><strong>What Happens:</strong>
+<li>Member pays remaining deductible</li>
+<li>Reduce family deductible (if exists)</li>
+<li>Reduce service_amount by deductible</li>
+<li>Set individual deductible to 0 (met!)</li>
+<li>Calculation NOT complete (remaining service amount)</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+service_amount = 700.00
+deductible_individual_calculated = 500.00
+member_pays = 0.00</p>
+<p><h1>After</h1>
+member_pays = 500.00
+deductible_individual_calculated = 0.00 (MET!)
+service_amount = 200.00
+calculation_complete = False</p>
+<p>Note: OOPMax values UNCHANGED
+Next: Process remaining $200 with copay/coinsurance</code></pre></p>
+<p>---</p>
+<p><h3>Method 2: _apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax() (Lines 83-128)</h3></p>
+<p><pre><code class="language-python">def _apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax(
+    self, context: InsuranceContext
+) -> InsuranceContext:
+    """Member pays lesser of the service or individual deductible and it will get counted towards individual and family OOPMax"""</code></pre></p>
+<p><strong>Purpose:</strong> Apply deductible AND count toward OOPMax</p>
+<p><strong>Two Scenarios:</strong></p>
+<p><strong>Scenario A: Service < Deductible (Lines 88-103)</strong>
+<pre><code class="language-python">if (
+    context.deductible_individual_calculated is not None
+    and context.service_amount < context.deductible_individual_calculated
+):
+    context.member_pays += context.service_amount
+    if context.oopmax_family_calculated is not None:
+        context.oopmax_family_calculated -= context.service_amount
+    if context.oopmax_individual_calculated is not None:
+        context.oopmax_individual_calculated -= context.service_amount
+    if context.deductible_family_calculated is not None:
+        context.deductible_family_calculated -= context.service_amount
+    if context.deductible_individual_calculated is not None:
+        context.deductible_individual_calculated -= context.service_amount
+    context.service_amount = 0
+    
+    context.calculation_complete = True</code></pre></p>
+<p><strong>What Happens:</strong>
+<li>Member pays full service amount</li>
+<li>Reduce family OOPMax (if exists)</li>
+<li>Reduce individual OOPMax (if exists)</li>
+<li>Reduce family deductible (if exists)</li>
+<li>Reduce individual deductible</li>
+<li>Set service_amount to 0</li>
+<li>Mark calculation complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+service_amount = 200.00
+deductible_individual_calculated = 500.00
+oopmax_individual_calculated = 5000.00
+member_pays = 0.00</p>
+<p><h1>After</h1>
+member_pays = 200.00
+deductible_individual_calculated = 300.00
+oopmax_individual_calculated = 4800.00 (REDUCED!)
+service_amount = 0.00
+calculation_complete = True</p>
+<p>Note: Payment counts toward BOTH deductible AND OOPMax</code></pre></p>
+<p><strong>Scenario B: Service >= Deductible (Lines 104-121)</strong>
+<pre><code class="language-python">elif context.deductible_individual_calculated is not None:
+    context.member_pays += context.deductible_individual_calculated
+    if context.deductible_family_calculated is not None:
+        context.deductible_family_calculated -= (
+            context.deductible_individual_calculated
+        )
+    if context.oopmax_family_calculated is not None:
+        context.oopmax_family_calculated -= (
+            context.deductible_individual_calculated
+        )
+    if context.oopmax_individual_calculated is not None:
+        context.oopmax_individual_calculated -= (
+            context.deductible_individual_calculated
+        )
+    context.service_amount -= context.deductible_individual_calculated
+    context.deductible_individual_calculated = 0
+    
+    # another step, then must go to deductible_co_insurance_handler</code></pre></p>
+<p><strong>What Happens:</strong>
+<li>Member pays remaining deductible</li>
+<li>Reduce family deductible (if exists)</li>
+<li>Reduce family OOPMax (if exists)</li>
+<li>Reduce individual OOPMax (if exists)</li>
+<li>Reduce service_amount by deductible</li>
+<li>Set individual deductible to 0 (met!)</li>
+<li>Calculation NOT complete</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+service_amount = 700.00
+deductible_individual_calculated = 500.00
+oopmax_individual_calculated = 5000.00
+member_pays = 0.00</p>
+<p><h1>After</h1>
+member_pays = 500.00
+deductible_individual_calculated = 0.00 (MET!)
+oopmax_individual_calculated = 4500.00 (REDUCED!)
+service_amount = 200.00
+calculation_complete = False</p>
+<p>Note: Deductible payment counted toward OOPMax
+Next: Process remaining $200 with copay/coinsurance</code></pre></p>
+<p>---</p>
+<p><h2>7. Key Concept: Deductible Counts Toward OOPMax</h2></p>
+<p><h3>Understanding the Flag</h3></p>
+<p><strong>deductible_applies_oop:</strong>
+<pre><code class="language-python">context.deductible_applies_oop: bool</p>
+<p>True  → Deductible payments count toward OOPMax
+False → Deductible payments do NOT count toward OOPMax</code></pre></p>
+<p><h3>Why This Matters</h3></p>
+<p><strong>Most Plans (deductible_applies_oop = True):</strong>
+<pre><code class="language-">Annual Deductible: $2,000
+Annual OOPMax: $8,000</p>
+<p>Member pays $2,000 for deductible
+Progress toward OOPMax: $2,000 / $8,000
+Remaining OOPMax: $6,000</code></pre></p>
+<p><strong>Some Plans (deductible_applies_oop = False):</strong>
+<pre><code class="language-">Annual Deductible: $2,000
+Annual OOPMax: $8,000</p>
+<p>Member pays $2,000 for deductible
+Progress toward OOPMax: $0 / $8,000
+Remaining OOPMax: $8,000 (unchanged)</p>
+<p>Member must pay additional $8,000 after deductible!</code></pre></p>
+<p><h3>Impact on Member</h3></p>
+<p><strong>Scenario: Cancer Treatment</strong></p>
+<p><strong>Plan A (deductible counts):</strong>
+<pre><code class="language-">Deductible: $2,000
+OOPMax: $8,000
+Treatment costs: $50,000</p>
+<p>Member pays:
+  $2,000 → deductible (counts toward OOPMax)
+  $6,000 → additional (reach OOPMax)
+Total: $8,000</p>
+<p>Insurance pays: $42,000</code></pre></p>
+<p><strong>Plan B (deductible doesn't count):</strong>
+<pre><code class="language-">Deductible: $2,000
+OOPMax: $8,000
+Treatment costs: $50,000</p>
+<p>Member pays:
+  $2,000 → deductible (does NOT count)
+  $8,000 → additional (reach OOPMax)
+Total: $10,000</p>
+<p>Insurance pays: $40,000</code></pre></p>
+<p>---</p>
+<p><h2>8. Real-World Examples</h2></p>
+<p><h3>Example 1: Service Fully Covered by Deductible (Counts Toward OOPMax)</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Individual Deductible: $500 remaining
+OOPMax: $5,000 remaining
+deductible_applies_oop = True</code></pre></p>
+<p><strong>Service:</strong>
+<pre><code class="language-">Doctor visit: $200</code></pre></p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python">context.service_amount = 200.00
+context.deductible_individual_calculated = 500.00
+context.oopmax_individual_calculated = 5000.00</p>
+<p><h1>deductible_applies_oop = True</h1>
+<h1>service < deductible (200 < 500)</h1></p>
+<p>member_pays += 200.00
+deductible_individual_calculated -= 200.00
+oopmax_individual_calculated -= 200.00
+service_amount = 0.00
+calculation_complete = True</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $200
+New deductible: $300 remaining
+New OOPMax: $4,800 remaining
+Calculation: COMPLETE</code></pre></p>
+<p>---</p>
+<p><h3>Example 2: Service Exceeds Deductible (Counts Toward OOPMax)</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Individual Deductible: $500 remaining
+OOPMax: $5,000 remaining
+deductible_applies_oop = True</code></pre></p>
+<p><strong>Service:</strong>
+<pre><code class="language-">Surgery: $2,000</code></pre></p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python">context.service_amount = 2000.00
+context.deductible_individual_calculated = 500.00
+context.oopmax_individual_calculated = 5000.00</p>
+<p><h1>deductible_applies_oop = True</h1>
+<h1>service >= deductible (2000 >= 500)</h1></p>
+<p>member_pays += 500.00
+deductible_individual_calculated = 0.00 (MET!)
+oopmax_individual_calculated -= 500.00
+service_amount -= 500.00
+calculation_complete = False</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $500 (so far, more from next handler)
+Service remaining: $1,500
+New deductible: $0 (MET!)
+New OOPMax: $4,500 remaining
+Next: Apply copay/coinsurance to remaining $1,500</code></pre></p>
+<p>---</p>
+<p><h3>Example 3: Deductible Does NOT Count Toward OOPMax</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Individual Deductible: $500 remaining
+OOPMax: $5,000 remaining
+deductible_applies_oop = False</code></pre></p>
+<p><strong>Service:</strong>
+<pre><code class="language-">Doctor visit: $200</code></pre></p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python">context.service_amount = 200.00
+context.deductible_individual_calculated = 500.00
+context.oopmax_individual_calculated = 5000.00</p>
+<p><h1>deductible_applies_oop = False</h1>
+<h1>service < deductible (200 < 500)</h1></p>
+<p>member_pays += 200.00
+deductible_individual_calculated -= 200.00
+<h1>OOPMax: NO CHANGE</h1>
+service_amount = 0.00
+calculation_complete = True</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $200
+New deductible: $300 remaining
+OOPMax: $5,000 remaining (UNCHANGED!)
+Calculation: COMPLETE</code></pre></p>
+<p>---</p>
+<p><h3>Example 4: Family Deductible Tracking</h3></p>
+<p><strong>Plan:</strong>
+<pre><code class="language-">Individual Deductible: $500 remaining
+Family Deductible: $2,000 remaining
+OOPMax: $5,000 remaining
+deductible_applies_oop = True</code></pre></p>
+<p><strong>Service:</strong>
+<pre><code class="language-">Lab test: $300</code></pre></p>
+<p><strong>Processing:</strong>
+<pre><code class="language-python"><h1>Both individual AND family deductibles are reduced</h1></p>
+<p>member_pays += 300.00
+deductible_individual_calculated -= 300.00  # $500 → $200
+deductible_family_calculated -= 300.00      # $2000 → $1700
+oopmax_individual_calculated -= 300.00      # $5000 → $4700
+service_amount = 0.00
+calculation_complete = True</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $300
+Individual deductible: $200 remaining
+Family deductible: $1,700 remaining
+OOPMax: $4,700 remaining
+All values tracked simultaneously</code></pre></p>
+<p>---</p>
+<p><h2>9. Integration with Handler Chain</h2></p>
+<p><h3>How This Handler is Reached</h3></p>
+<p><strong>From DeductibleHandler:</strong></p>
+<p><pre><code class="language-python"><h1>In DeductibleHandler</h1>
+if not context.is_deductible_before_copay:
+    if context.cost_share_copay > 0:
+        return self._deductible_co_pay_handler.handle(context)
+    else:
+        return self._deductible_oopmax_handler.handle(context)
+else:
+    return self._deductible_oopmax_handler.handle(context)</code></pre></p>
+<p><strong>Common paths:</strong>
+<li>Deductible NOT met</li>
+<li>Deductible applies before copay (standard)</li>
+<li>Deductible applies after copay (but no copay amount)</li></p>
+<p><h3>Position in Chain</h3></p>
+<p><pre><code class="language-">1. ServiceCoverageHandler
+<li>BenefitLimitationHandler</li>
+<li>OOPMaxHandler</li>
+<li>DeductibleHandler</li>
+<li>DeductibleOOPMaxHandler ← YOU ARE HERE</li>
+   ↓ (if not complete)
+   ├─ Route A: DeductibleCostShareCoPayHandler
+   └─ Route B: DeductibleCoInsuranceHandler</code></pre></p>
+<p><h3>Flow Visualization</h3></p>
+<p><pre><code class="language-">        DeductibleHandler
+              ↓
+    (Deductible NOT met)
+              ↓
+    DeductibleOOPMaxHandler
+              ↓
+      Apply Deductible
+              ↓
+    ┌──────────────────┐
+    │ Service fully    │
+    │ covered?         │
+    └─────┬────────────┘
+          │
+    ┌─────┴─────┐
+    │           │
+   YES         NO
+    │           │
+    ↓           ↓
+  [STOP]  ┌──────────────────┐
+          │is_deductible_    │
+          │before_copay?     │
+          └─────┬────────────┘
+                │
+         ┌──────┴──────┐
+         │             │
+       TRUE          FALSE
+         │             │
+         ↓             ↓
+[DeductibleCost]  [DeductibleCo]
+[ShareCoPay]      [Insurance]</code></pre></p>
+<p>---</p>
+<p><h2>10. Complete Code Walkthrough</h2></p>
+<p><h3>Line-by-Line Explanation</h3></p>
+<p><pre><code class="language-python"><h1>LINE 1: Import base classes</h1>
+from app.core.base import Handler, InsuranceContext</p>
+<p><h1>LINE 4: Define handler class</h1>
+class DeductibleOOPMaxHandler(Handler):
+    # Calculation + Routing handler
+    # Applies deductible and manages OOPMax tracking
+    
+    
+    # LINE 5: Docstring
+    """Handles logic for OOPMax calculations for deductibles"""
+    # Key: "calculations" - this handler does math!</p>
+<p>    # LINE 7-9: Setup coinsurance handler reference
+    def set_deductible_co_insurance_handler(self, handler):
+        # Store reference to DeductibleCoInsuranceHandler
+        self._deductible_co_insurance_handler = handler
+        return handler
+        # Used when deductible after copay</p>
+<p>    # LINE 11-13: Setup cost share copay handler reference
+    def set_deductible_cost_share_co_pay_handler(self, handler):
+        # Store reference to DeductibleCostShareCoPayHandler
+        self._deductible_cost_share_co_pay_handler = handler
+        return handler
+        # Used when deductible before copay</p>
+<p>    # LINE 15: Main processing method
+    def process(self, context):
+        # Input: Context with deductible NOT met
+        # Output: Modified context with deductible applied
+        
+        
+        # LINE 17-20: Safety check
+        if context.calculation_complete:
+            # Shouldn't be complete yet
+            context.trace(
+                "Process", "Calculation should not be marked as complete yet!!"
+            )
+            # Log but continue processing
+        
+        
+        # LINE 22-33: Check if deductible counts toward OOPMax
+        if context.deductible_applies_oop:
+            # TRUE: Deductible payments count toward OOPMax
+            
+            # Add trace
+            context.trace_decision("Process", "The deductible applies to OOP", True)
+            
+            # Call helper that updates BOTH deductible AND OOPMax
+            context = self._apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax(
+                context
+            )
+        else:
+            # FALSE: Deductible payments do NOT count toward OOPMax
+            
+            # Add trace
+            context.trace_decision(
+                "Process", "The deductible does not apply to OOP", False
+            )
+            
+            # Call helper that updates ONLY deductible
+            context = self._apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax(
+                context
+            )
+        
+        
+        # LINE 35-36: Check if calculation complete
+        if context.calculation_complete:
+            # Service was fully covered by deductible
+            # Nothing left to process
+            return context
+        
+        
+        # LINE 38-47: Route to next handler
+        if context.is_deductible_before_copay:
+            # Deductible before copay (standard)
+            
+            # Add trace
+            context.trace_decision("Process", "The deductible is before co-pay", True)
+            
+            # Route to determine copay vs coinsurance
+            return self._deductible_cost_share_co_pay_handler.handle(context)
+        else:
+            # Deductible after copay
+            
+            # Add trace
+            context.trace_decision(
+                "Process",
+                "The deductible is after co-pay, so checking for coinsurance",
+                False,
+            )
+            
+            # Route to coinsurance handler
+            return self._deductible_co_insurance_handler.handle(context)</p>
+<p>    # LINE 49-81: Helper - Deductible does NOT count toward OOPMax
+    def _apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Member pays lesser of the service or Individual Deductible and it will not count towards OOPMax"""
+        
+        # LINE 54-64: Scenario A - Service < Deductible
+        if (
+            context.deductible_individual_calculated is not None
+            and context.service_amount < context.deductible_individual_calculated
+        ):
+            # Member pays full service amount
+            context.member_pays += context.service_amount
+            
+            # Reduce family deductible (if exists)
+            if context.deductible_family_calculated is not None:
+                context.deductible_family_calculated -= context.service_amount
+            
+            # Reduce individual deductible
+            context.deductible_individual_calculated -= context.service_amount
+            
+            # Set service to 0 (fully paid)
+            context.service_amount = 0
+            
+            # Mark complete
+            context.calculation_complete = True
+        
+        # LINE 65-74: Scenario B - Service >= Deductible
+        elif context.deductible_individual_calculated is not None:
+            # Member pays remaining deductible
+            context.member_pays += context.deductible_individual_calculated
+            
+            # Reduce family deductible (if exists)
+            if context.deductible_family_calculated is not None:
+                context.deductible_family_calculated -= (
+                    context.deductible_individual_calculated
+                )
+            
+            # Reduce service amount
+            context.service_amount -= context.deductible_individual_calculated
+            
+            # Set individual deductible to 0 (MET!)
+            context.deductible_individual_calculated = 0
+            
+            # Note: calculation NOT complete (service remaining)
+        
+        # LINE 76-79: Add trace
+        context.trace(
+            "_apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax",
+            "Logic applied",
+        )
+        
+        # LINE 81: Return modified context
+        return context</p>
+<p>    # LINE 83-128: Helper - Deductible DOES count toward OOPMax
+    def _apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax(
+        self, context: InsuranceContext
+    ) -> InsuranceContext:
+        """Member pays lesser of the service or individual deductible and it will get counted towards individual and family OOPMax"""
+        
+        # LINE 88-103: Scenario A - Service < Deductible
+        if (
+            context.deductible_individual_calculated is not None
+            and context.service_amount < context.deductible_individual_calculated
+        ):
+            # Member pays full service amount
+            context.member_pays += context.service_amount
+            
+            # Reduce family OOPMax (if exists)
+            if context.oopmax_family_calculated is not None:
+                context.oopmax_family_calculated -= context.service_amount
+            
+            # Reduce individual OOPMax (if exists)
+            if context.oopmax_individual_calculated is not None:
+                context.oopmax_individual_calculated -= context.service_amount
+            
+            # Reduce family deductible (if exists)
+            if context.deductible_family_calculated is not None:
+                context.deductible_family_calculated -= context.service_amount
+            
+            # Reduce individual deductible
+            if context.deductible_individual_calculated is not None:
+                context.deductible_individual_calculated -= context.service_amount
+            
+            # Set service to 0
+            context.service_amount = 0
+            
+            # Mark complete
+            context.calculation_complete = True
+        
+        # LINE 104-121: Scenario B - Service >= Deductible
+        elif context.deductible_individual_calculated is not None:
+            # Member pays remaining deductible
+            context.member_pays += context.deductible_individual_calculated
+            
+            # Reduce family deductible (if exists)
+            if context.deductible_family_calculated is not None:
+                context.deductible_family_calculated -= (
+                    context.deductible_individual_calculated
+                )
+            
+            # Reduce family OOPMax (if exists)
+            if context.oopmax_family_calculated is not None:
+                context.oopmax_family_calculated -= (
+                    context.deductible_individual_calculated
+                )
+            
+            # Reduce individual OOPMax (if exists)
+            if context.oopmax_individual_calculated is not None:
+                context.oopmax_individual_calculated -= (
+                    context.deductible_individual_calculated
+                )
+            
+            # Reduce service amount
+            context.service_amount -= context.deductible_individual_calculated
+            
+            # Set individual deductible to 0 (MET!)
+            context.deductible_individual_calculated = 0
+            
+            # Note: calculation NOT complete
+        
+        # LINE 123-126: Add trace
+        context.trace(
+            "_apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax",
+            "Logic applied",
+        )
+        
+        # LINE 128: Return modified context
+        return context</code></pre></p>
+<p>---</p>
+<p><h2>11. Decision Tree and Flow</h2></p>
+<p><h3>Complete Decision Tree</h3></p>
+<p><pre><code class="language-">┌──────────────────────────────────────────┐
+│ START: DeductibleOOPMaxHandler           │
+│ Context: Deductible NOT met              │
+└──────────────────┬───────────────────────┘
+                   ↓
+            ┌──────────────────┐
+            │ deductible_      │
+            │ applies_oop?     │
+            └──────┬───────────┘
+                   │
+            ┌──────┴──────┐
+            │             │
+          TRUE          FALSE
+            │             │
+            ↓             ↓
+    ┌───────────────┐  ┌─────────────────┐
+    │Update OOPMax  │  │Do NOT update    │
+    │+ Deductible   │  │OOPMax           │
+    └───────┬───────┘  └────────┬────────┘
+            │                   │
+            └────────┬──────────┘
+                     ↓
+            ┌─────────────────┐
+            │ service <       │
+            │ deductible?     │
+            └────────┬────────┘
+                     │
+              ┌──────┴──────┐
+              │             │
+             YES           NO
+              │             │
+              ↓             ↓
+      ┌──────────────┐  ┌────────────────┐
+      │Member pays:  │  │Member pays:    │
+      │Service amt   │  │Deductible amt  │
+      │              │  │                │
+      │Service = 0   │  │Service remains │
+      │COMPLETE      │  │NOT complete    │
+      └──────────────┘  └───────┬────────┘
+                                │
+                                ↓
+                        ┌────────────────┐
+                        │is_deductible_  │
+                        │before_copay?   │
+                        └───────┬────────┘
+                                │
+                         ┌──────┴──────┐
+                         │             │
+                       TRUE          FALSE
+                         │             │
+                         ↓             ↓
+                 [DeductibleCost]  [DeductibleCo]
+                 [ShareCoPay]      [Insurance]</code></pre></p>
+<p>---</p>
+<p><h2>12. Impact and Importance</h2></p>
+<p><h3>Why This Handler Matters</h3></p>
+<p><strong>Accurate Deductible Application:</strong>
+<pre><code class="language-">✓ Correctly applies service to deductible
+✓ Tracks individual and family deductibles
+✓ Determines when deductible is met</code></pre></p>
+<p><strong>OOPMax Tracking:</strong>
+<pre><code class="language-">✓ Correctly updates OOPMax when applicable
+✓ Tracks progress toward OOPMax
+✓ Ensures accurate annual limit tracking</code></pre></p>
+<p><strong>Member Experience:</strong>
+<pre><code class="language-">✓ Clear: Payment goes to deductible
+✓ Accurate: Correct remaining amounts
+✓ Transparent: Members see progress</code></pre></p>
+<p><h3>Real-World Impact</h3></p>
+<p><strong>Scenario: Major Surgery</strong></p>
+<p><pre><code class="language-">Before Surgery:
+  Deductible: $2,000 remaining
+  OOPMax: $8,000 remaining
+  
+Surgery: $50,000</p>
+<p>Handler Processing:
+  Member pays: $2,000 (remaining deductible)
+  Deductible: $0 (MET!)
+  OOPMax: $6,000 remaining (if applies)
+  Service remaining: $48,000
+  
+Continue processing remaining $48,000...</p>
+<p>Accuracy: Critical for high-cost services!</code></pre></p>
+<p><h3>Edge Case Handling</h3></p>
+<p><strong>Small Service vs Large Deductible:</strong>
+<pre><code class="language-">Service: $50
+Deductible: $2,000</p>
+<p>Handler correctly:
+  ✓ Applies $50 to deductible
+  ✓ Marks calculation complete
+  ✓ Doesn't try to process non-existent remainder</code></pre></p>
+<p>---</p>
+<p><h2>Summary</h2></p>
+<p><h3>What We Learned</h3></p>
+<p><li><strong>DeductibleOOPMaxHandler</strong> applies deductible payments and manages OOPMax tracking</li></p>
+<p><li><strong>Two Helper Methods:</strong></li>
+   - Deductible does NOT count toward OOPMax
+   - Deductible DOES count toward OOPMax</p>
+<p><li><strong>Two Scenarios:</strong></li>
+   - Service < Deductible: Pay service, calculation complete
+   - Service >= Deductible: Pay deductible, continue processing</p>
+<p><li><strong>Key Flag:</strong></li>
+   - <code>deductible_applies_oop</code>: Determines if payment counts toward OOPMax</p>
+<p><li><strong>Updates Multiple Values:</strong></li>
+   - member_pays
+   - deductible_individual_calculated
+   - deductible_family_calculated
+   - oopmax_individual_calculated (if applies)
+   - oopmax_family_calculated (if applies)
+   - service_amount</p>
+<p><li><strong>Routing:</strong></li>
+   - Complete if service fully covered
+   - Routes based on is_deductible_before_copay</p>
+<p><h3>Key Takeaways</h3></p>
+<p>✓ <strong>Calculation Handler</strong>: Modifies context values
+✓ <strong>OOPMax Aware</strong>: Tracks both deductible and OOPMax
+✓ <strong>Two Scenarios</strong>: Service < or >= deductible
+✓ <strong>Family Tracking</strong>: Updates both individual and family values
+✓ <strong>Conditional Complete</strong>: Stops if service fully covered
+✓ <strong>Smart Routing</strong>: Determines next handler based on order</p>
+<p><h3>Real-World Value</h3></p>
+<p><strong>Ensures:</strong>
+<li>Accurate deductible application</li>
+<li>Correct OOPMax tracking</li>
+<li>Proper handling of large vs small services</li>
+<li>Clear progress toward limits</li></p>
+<p><strong>Prevents:</strong>
+<li>Incorrect deductible calculations</li>
+<li>Missing OOPMax updates</li>
+<li>Processing errors</li>
+<li>Member confusion</li></p>
+<p>---</p>
+<p><strong>End of Deductible OOPMax Handler Deep Dive</strong>
+</p>
+    </div>
+    <div class="footer">
+        <p><strong>Deductible OOPMax Handler - Technical Documentation</strong></p>
+        <p>© 2025 | Complete Deep Dive of deductible_oopmax_handler.py</p>
+    </div>
+</body>
+</html>
