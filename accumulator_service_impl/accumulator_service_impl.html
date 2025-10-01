@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Accumulator Service - Deep Dive</title>
+    <style>
+        @page {
+            margin: 0.75in;
+        }
+        @media print {
+            body { font-size: 10pt; }
+            h1 { page-break-before: always; margin-top: 0; }
+            h1:first-of-type { page-break-before: auto; }
+            h2 { page-break-before: always; margin-top: 0; }
+            h2:first-of-type { page-break-before: auto; }
+            pre, table { page-break-inside: avoid; }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            line-height: 1.7;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #2c3e50;
+        }
+        .cover {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: -40px -20px 60px -20px;
+            padding: 100px 20px;
+            page-break-after: always;
+        }
+        .cover h1 {
+            font-size: 3.5em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .cover .subtitle {
+            font-size: 1.8em;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #3498db;
+            padding-bottom: 15px;
+            margin-top: 60px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 12px;
+            margin-top: 50px;
+            font-size: 2em;
+        }
+        h3 {
+            color: #2980b9;
+            margin-top: 35px;
+            font-size: 1.5em;
+        }
+        h4 {
+            color: #16a085;
+            margin-top: 25px;
+            font-size: 1.2em;
+        }
+        code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: Monaco, 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        pre code {
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 25px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 14px;
+            text-align: left;
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        li {
+            margin: 10px 0;
+        }
+        .footer {
+            margin-top: 80px;
+            padding-top: 30px;
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <h1>Accumulator Service</h1>
+        <div class="subtitle">Complete Deep Dive Analysis</div>
+        <div class="subtitle">accumulator_service_impl.py Explained</div>
+        <div class="version">
+            <p>Technical Documentation v1.0</p>
+            <p>October 2025</p>
+        </div>
+    </div>
+    <div class="content">
+        <p><h1>Accumulator Service - Complete Deep Dive Analysis</h1></p>
+<p><h2>Comprehensive Explanation of <code>accumulator_service_impl.py</code></h2></p>
+<p>---</p>
+<p><h2>Table of Contents</h2></p>
+<p><li>[Executive Summary](#executive-summary)</li>
+<li>[What is an Accumulator?](#what-is-an-accumulator)</li>
+<li>[Service Architecture](#service-architecture)</li>
+<li>[Key Components](#key-components)</li>
+<li>[Main Methods Explained](#main-methods-explained)</li>
+<li>[API Communication Flow](#api-communication-flow)</li>
+<li>[Token Management](#token-management)</li>
+<li>[Error Handling Strategy](#error-handling-strategy)</li>
+<li>[Response Structure](#response-structure)</li>
+<li>[Retry and Circuit Breaker Patterns](#retry-and-circuit-breaker-patterns)</li>
+<li>[Complete Code Walkthrough](#complete-code-walkthrough)</li>
+<li>[Real-World Examples](#real-world-examples)</li>
+<li>[Performance and Reliability](#performance-and-reliability)</li></p>
+<p>---</p>
+<p><h2>1. Executive Summary</h2></p>
+<p><h3>What Does This Service Do?</h3></p>
+<p>The <strong>Accumulator Service</strong> (<code>accumulator_service_impl.py</code>) is responsible for:</p>
+<p><li><strong>Fetching</strong> accumulator data from an external API</li>
+<li><strong>Managing</strong> OAuth authentication tokens</li>
+<li><strong>Handling</strong> HTTP communication with retry and circuit breaker patterns</li>
+<li><strong>Parsing</strong> JSON/XML responses into structured data</li>
+<li><strong>Providing</strong> member's current accumulator values (deductibles, OOP max, limits)</li></p>
+<p><h3>Why Is It Important?</h3></p>
+<p>Accumulators contain <strong>critical financial information</strong>:
+<li>How much deductible has the member paid? ($500 out of $1000)</li>
+<li>How close are they to out-of-pocket maximum? ($2000 out of $5000)</li>
+<li>Are there any benefit limits used? (2 out of 10 visits)</li></p>
+<p><strong>Without this data, we cannot calculate accurate cost estimates!</strong></p>
+<p>---</p>
+<p><h2>2. What is an Accumulator?</h2></p>
+<p><h3>Definition</h3></p>
+<p>An <strong>accumulator</strong> is a running total that tracks healthcare expenses or service usage during a benefit period (usually a calendar year).</p>
+<p><h3>Types of Accumulators</h3></p>
+<p><h4><strong>1. Deductible</strong></h4>
+<pre><code class="language-">Purpose: Amount member must pay before insurance starts covering
+Example:
+  - Limit: $1000 (annual deductible)
+  - Current: $400 (already paid)
+  - Calculated: $600 (remaining)</code></pre></p>
+<p><h4><strong>2. Out-of-Pocket Maximum (OOP Max)</strong></h4>
+<pre><code class="language-">Purpose: Maximum amount member pays in a year
+Example:
+  - Limit: $5000 (annual max)
+  - Current: $2000 (already paid)
+  - Calculated: $3000 (remaining before insurance pays 100%)</code></pre></p>
+<p><h4><strong>3. Benefit Limits</strong></h4>
+<pre><code class="language-">Purpose: Service usage limits (visits, procedures, etc.)
+Example:
+  - Limit: 10 (physical therapy visits per year)
+  - Current: 7 (visits used)
+  - Calculated: 3 (visits remaining)</code></pre></p>
+<p><h3>Accumulator Levels</h3></p>
+<p><strong>Individual Level:</strong>
+<li>Tracks one person's expenses</li>
+<li>Example: John's individual deductible</li></p>
+<p><strong>Family Level:</strong>
+<li>Tracks entire family's expenses</li>
+<li>Example: Smith family's total OOP max</li></p>
+<p><h3>Key Accumulator Fields</h3></p>
+<p><pre><code class="language-python">Accumulator(
+    code="Deductible",              # Type of accumulator
+    level="Individual",             # Individual or Family
+    currentValue=400.0,             # Already used
+    limitValue=1000.0,              # Total allowed
+    calculatedValue=600.0,          # Remaining (1000-400)
+    networkIndicator="InNetwork",   # In-Network or Out-of-Network
+    frequency="Calendar Year",      # Reset period
+    effectivePeriod={               # When it's active
+        "datetimeBegin": "2025-01-01",
+        "datetimeEnd": "2025-12-31"
+    }
+)</code></pre></p>
+<p>---</p>
+<p><h2>3. Service Architecture</h2></p>
+<p><h3>Class Structure</h3></p>
+<p><pre><code class="language-python">class AccumulatorServiceImpl(AccumulatorServiceInterface):
+    """
+    Service implementation for handling accumulator-related operations.
+    """
+    
+    def __init__(self):
+        self.ssl_context = ssl.create_default_context()  # SSL configuration
+        self.token_service = TokenService()               # Authentication
+    
+    # Main method (JSON API)
+    async def get_accumulator(request, headers) -> AccumulatorResponse
+    
+    # Alternative method (XML API - legacy)
+    async def get_accumulator_xml(request, headers) -> AccumulatorResponse</code></pre></p>
+<p><h3>Dependencies</h3></p>
+<p><pre><code class="language-">AccumulatorServiceImpl
+├── aiohttp (Async HTTP client)
+├── TokenService (Authentication)
+├── SessionManager (Token storage)
+├── CircuitBreaker (Fault tolerance)
+├── xmltodict (XML parsing - legacy)
+└── AccumulatorResponse (Response model)</code></pre></p>
+<p><h3>External API Communication</h3></p>
+<p><pre><code class="language-">Cost Estimator Service
+         ↓
+   [HTTP GET Request]
+         ↓
+External Accumulator API
+(e.g., https://api.example.com/memberships/{id}/accumulators)
+         ↓
+   [JSON Response]
+         ↓
+AccumulatorServiceImpl
+         ↓
+  AccumulatorResponse</code></pre></p>
+<p>---</p>
+<p><h2>4. Key Components</h2></p>
+<p><h3>4.1 SSL Context (Lines 35-38)</h3></p>
+<p><pre><code class="language-python">self.ssl_context = ssl.create_default_context()
+self.ssl_context.check_hostname = False
+self.ssl_context.verify_mode = ssl.CERT_NONE</code></pre></p>
+<p><strong>Purpose:</strong> Configure SSL/TLS for HTTPS communication</p>
+<p><strong>Why disable certificate verification?</strong>
+<li>Development/testing environments may use self-signed certificates</li>
+<li>Internal APIs may not have valid public certificates</li>
+<li><strong>Note:</strong> In production, proper certificate validation should be enabled!</li></p>
+<p><h3>4.2 Token Service (Line 39)</h3></p>
+<p><pre><code class="language-python">self.token_service = TokenService()</code></pre></p>
+<p><strong>Purpose:</strong> Obtain OAuth 2.0 access tokens for API authentication</p>
+<p><strong>Token Structure:</strong>
+<pre><code class="language-python">token = {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "id_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "Bearer",
+    "expires_in": 3600  # 1 hour
+}</code></pre></p>
+<p><h3>4.3 Session Manager</h3></p>
+<p><pre><code class="language-python">token = SessionManager.get_token()      # Retrieve stored token
+SessionManager.set_token(token)         # Store new token
+SessionManager.clear_token()            # Remove expired token</code></pre></p>
+<p><strong>Purpose:</strong> Centralized token storage across all services</p>
+<p><strong>Benefits:</strong>
+<li>Avoid redundant token requests</li>
+<li>Share tokens between services</li>
+<li>Automatic token refresh</li></p>
+<p>---</p>
+<p><h2>5. Main Methods Explained</h2></p>
+<p><h3>5.1 <code>get_accumulator()</code> - Primary Method</h3></p>
+<p><strong>Signature:</strong>
+<pre><code class="language-python">@circuit_breaker("accumulator_service")
+@retry(stop=stop_after_attempt(3), 
+       wait=wait_exponential(multiplier=1, min=4, max=10))
+async def get_accumulator(
+    self, 
+    request: CostEstimatorRequest, 
+    headers: Optional[Dict[str, str]] = None
+) -> AccumulatorResponse:</code></pre></p>
+<p><strong>Decorators:</strong>
+<li><strong><code>@circuit_breaker</code></strong>: Prevents cascading failures</li>
+<li><strong><code>@retry</code></strong>: Automatically retries failed requests (up to 3 times)</li></p>
+<p><strong>Purpose:</strong> Fetch accumulator data from external JSON API</p>
+<p><strong>Flow:</strong>
+<pre><code class="language-">1. Get ACCUMULATOR_URL from environment
+<li>Retrieve/refresh authentication token</li>
+<li>Build HTTP GET request</li>
+<li>Send request to external API</li>
+<li>Handle response (success or error)</li>
+<li>Parse JSON into AccumulatorResponse</li>
+<li>Return structured data</code></pre></li></p>
+<p><h3>5.2 <code>get_accumulator_xml()</code> - Legacy Method</h3></p>
+<p><strong>Signature:</strong>
+<pre><code class="language-python">async def get_accumulator_xml(
+    self, 
+    request: CostEstimatorRequest, 
+    headers: Optional[Dict[str, str]] = None
+) -> AccumulatorResponse:</code></pre></p>
+<p><strong>Purpose:</strong> Fetch accumulator data from legacy XML API</p>
+<p><strong>Differences from JSON version:</strong>
+<li>Uses HTTP POST instead of GET</li>
+<li>Sends XML request body</li>
+<li>Parses XML response</li>
+<li>Legacy system compatibility</li></p>
+<p>---</p>
+<p><h2>6. API Communication Flow</h2></p>
+<p><h3>Step-by-Step Execution</h3></p>
+<p><h4><strong>Step 1: Environment Configuration (Lines 198-200)</strong></h4></p>
+<p><pre><code class="language-python">ACCUMULATOR_URL = os.getenv("ACCUMULATOR_URL")
+if not ACCUMULATOR_URL:
+    raise ValueError("ACCUMULATOR_URL environment variable is not set")</code></pre></p>
+<p><strong>Example URL:</strong>
+<pre><code class="language-">https://api.example.com/healthcare/v3/healthsparq_memberships</code></pre></p>
+<p><h4><strong>Step 2: Token Retrieval (Lines 202-207)</strong></h4></p>
+<p><pre><code class="language-python">token = SessionManager.get_token()
+if not token:
+    # Get new token if not available
+    token = await self.token_service.get_new_token()
+    SessionManager.set_token(token)</code></pre></p>
+<p><strong>Token Flow:</strong>
+<pre><code class="language-">Check SessionManager
+    ↓
+Token exists? → Use it
+    ↓
+Token missing? → Request new token from TokenService
+    ↓
+Store token in SessionManager for future use</code></pre></p>
+<p><h4><strong>Step 3: Build Request Headers (Lines 209-214)</strong></h4></p>
+<p><pre><code class="language-python">if isinstance(token, dict):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token['access_token']}",
+        "id_token": f"{token['id_token']}"
+    }</code></pre></p>
+<p><strong>Example Headers:</strong>
+<pre><code class="language-json">{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "id_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}</code></pre></p>
+<p><h4><strong>Step 4: Create HTTP Session (Lines 216-221)</strong></h4></p>
+<p><pre><code class="language-python">connector = aiohttp.TCPConnector(ssl=self.ssl_context)
+async with aiohttp.ClientSession(connector=connector) as session:
+    async with session.get(
+        url=f"{ACCUMULATOR_URL}/{request.membershipId}/accumulators?benefitProductType=Medical",
+        headers=headers
+    ) as response:</code></pre></p>
+<p><strong>Request URL Example:</strong>
+<pre><code class="language-">https://api.example.com/healthcare/v3/healthsparq_memberships/5~186103331+10+7+20240101+793854+8A+829/accumulators?benefitProductType=Medical</code></pre></p>
+<p><strong>URL Components:</strong>
+<li>Base URL: <code>https://api.example.com/healthcare/v3/healthsparq_memberships</code></li>
+<li>Member ID: <code>5~186103331+10+7+20240101+793854+8A+829</code></li>
+<li>Endpoint: <code>/accumulators</code></li>
+<li>Query Parameter: <code>?benefitProductType=Medical</code></li></p>
+<p><h4><strong>Step 5: Handle Response (Lines 222-278)</strong></h4></p>
+<p><strong>Success Path (Status 200):</strong>
+<pre><code class="language-python">response_data = await response.json()
+accumulator_response = AccumulatorResponse(**response_data)
+return accumulator_response</code></pre></p>
+<p><strong>Error Paths:</strong>
+<pre><code class="language-python"><h1>Token expired (401)</h1>
+if response.status == 401:
+    SessionManager.clear_token()
+    return await self.get_accumulator(request)  # Retry with new token</p>
+<p><h1>Bad request (400)</h1>
+if response.status == 400:
+    raise AccumulatorNotFoundException(...)</p>
+<p><h1>Server error (500)</h1>
+if response.status == 500:
+    raise AccumulatorNotFoundException(...)</p>
+<p><h1>Other errors</h1>
+if response.status != 200:
+    raise AccumulatorNotFoundException(...)</code></pre></p>
+<p>---</p>
+<p><h2>7. Token Management</h2></p>
+<p><h3>Token Lifecycle</h3></p>
+<p><pre><code class="language-">┌─────────────────────────────────────────────────────┐
+│ 1. Application Starts                               │
+│    - SessionManager has no token                    │
+└──────────────────┬──────────────────────────────────┘
+                   ↓
+┌─────────────────────────────────────────────────────┐
+│ 2. First Accumulator Request                        │
+│    - token = SessionManager.get_token() → None      │
+│    - token = TokenService.get_new_token()           │
+│    - SessionManager.set_token(token)                │
+└──────────────────┬──────────────────────────────────┘
+                   ↓
+┌─────────────────────────────────────────────────────┐
+│ 3. Subsequent Requests (within 1 hour)             │
+│    - token = SessionManager.get_token() → Valid     │
+│    - Use existing token ✓                           │
+└──────────────────┬──────────────────────────────────┘
+                   ↓
+┌─────────────────────────────────────────────────────┐
+│ 4. Token Expires (after 1 hour)                    │
+│    - API returns 401 Unauthorized                   │
+│    - SessionManager.clear_token()                   │
+│    - Recursive call to get_accumulator()            │
+│    - Get new token (back to step 2)                 │
+└─────────────────────────────────────────────────────┘</code></pre></p>
+<p><h3>Token Refresh Logic (Lines 224-226)</h3></p>
+<p><pre><code class="language-python">if response.status == 401:  # Token expired
+    SessionManager.clear_token()
+    return await self.get_accumulator(request)</code></pre></p>
+<p><strong>How It Works:</strong>
+<li>API responds with 401 (Unauthorized)</li>
+<li>Clear old token from SessionManager</li>
+<li><strong>Recursively call</strong> <code>get_accumulator()</code> again</li>
+<li>The recursive call will get a new token (lines 202-207)</li>
+<li>Retry the request with fresh token</li></p>
+<p><strong>Why Recursive Call?</strong>
+<li>Automatic retry with new token</li>
+<li>No duplicate token refresh logic</li>
+<li>Clean code structure</li></p>
+<p>---</p>
+<p><h2>8. Error Handling Strategy</h2></p>
+<p><h3>HTTP Status Code Handling</h3></p>
+<p><h4><strong>1. 401 Unauthorized - Token Expired</strong></h4></p>
+<p><pre><code class="language-python">if response.status == 401:
+    SessionManager.clear_token()
+    return await self.get_accumulator(request)  # Automatic retry</code></pre></p>
+<p><strong>Action:</strong> Refresh token and retry automatically</p>
+<p><h4><strong>2. 400 Bad Request - Invalid Request</strong></h4></p>
+<p><pre><code class="language-python">if response.status == 400:
+    try:
+        response_json = await response.json()
+        error_msg = (
+            f"Accumulator request failed with status 400: "
+            f"{response_json.get('httpMessage', 'Bad Request')} - "
+            f"{response_json.get('moreInformation', 'Invalid request data')}"
+        )
+    except Exception:
+        error_msg = f"Accumulator request failed with status 400: {response_text}"
+    
+    logger.error(error_msg)
+    raise AccumulatorNotFoundException(
+        message=f"Status {response.status}: {error_msg}",
+        accumulator_request=request.model_dump()
+    )</code></pre></p>
+<p><strong>Action:</strong> Log error and raise exception (no retry)</p>
+<p><strong>Possible Causes:</strong>
+<li>Invalid member ID</li>
+<li>Missing required parameters</li>
+<li>Malformed request</li></p>
+<p><h4><strong>3. 500 Internal Server Error</strong></h4></p>
+<p><pre><code class="language-python">if response.status == 500:
+    try:
+        response_json = await response.json()
+        error_msg = (
+            f"Accumulator service error with status 500: "
+            f"{response_json.get('httpMessage', 'Internal Server Error')} - "
+            f"{response_json.get('moreInformation', 'Service temporarily unavailable')}"
+        )
+    except Exception:
+        error_msg = f"Accumulator service error with status 500: {response_text}"
+    
+    logger.error(error_msg)
+    raise AccumulatorNotFoundException(
+        message=f"Status {response.status}: {error_msg}",
+        accumulator_request=request.model_dump()
+    )</code></pre></p>
+<p><strong>Action:</strong> Log error and raise exception (will be retried by <code>@retry</code> decorator)</p>
+<p><strong>Possible Causes:</strong>
+<li>External API down</li>
+<li>Database connection issues</li>
+<li>Internal API bugs</li></p>
+<p><h4><strong>4. Other Status Codes</strong></h4></p>
+<p><pre><code class="language-python">if response.status != 200:
+    # Generic error handling for unexpected status codes
+    raise AccumulatorNotFoundException(...)</code></pre></p>
+<p><h3>Exception Hierarchy</h3></p>
+<p><pre><code class="language-">Exception
+    └── CostEstimatorException
+        └── AccumulatorNotFoundException
+            - Raised when API call fails
+            - Contains request details for debugging
+        
+        └── AccumulatorMemberNotFoundException
+            - Raised when member not found in system
+            - Specific error for missing member</code></pre></p>
+<p><h3>Exception Re-raising (Lines 280-287)</h3></p>
+<p><pre><code class="language-python">except AccumulatorNotFoundException:
+    raise  # Re-raise without modification
+except Exception as e:
+    logger.error(f"Error in get_accumulator: {str(e)}")
+    raise AccumulatorNotFoundException(
+        message=str(e),
+        accumulator_request=request.model_dump()
+    )</code></pre></p>
+<p><strong>Why Re-raise?</strong>
+<li>Preserve exception type for upstream handlers</li>
+<li>Add context (request details) for debugging</li>
+<li>Log unexpected errors</li></p>
+<p>---</p>
+<p><h2>9. Response Structure</h2></p>
+<p><h3>API Response Format</h3></p>
+<p><strong>Raw JSON Response:</strong>
+<pre><code class="language-json">{
+  "readAccumulatorsResponse": {
+    "memberships": {
+      "subscriber": {
+        "privacyRestriction": "false",
+        "membershipIdentifier": {
+          "idSource": "5",
+          "idValue": "186103331+10+7+20240101+793854+8A+829",
+          "idType": "memberships",
+          "resourceId": "5~186103331+10+7+20240101+793854+8A+829"
+        },
+        "accumulators": [
+          {
+            "level": "Individual",
+            "frequency": "Calendar Year",
+            "benefitProductType": "Medical",
+            "description": "Deductible",
+            "currentValue": "400.00",
+            "limitValue": "1000.00",
+            "code": "Deductible",
+            "effectivePeriod": {
+              "datetimeBegin": "2025-01-01",
+              "datetimeEnd": "2025-12-31"
+            },
+            "calculatedValue": "600.00",
+            "networkIndicator": "InNetwork",
+            "networkIndicatorCode": "I"
+          },
+          {
+            "level": "Individual",
+            "frequency": "Calendar Year",
+            "description": "Out of Pocket Maximum",
+            "currentValue": "2000.00",
+            "limitValue": "5000.00",
+            "code": "OOP Max",
+            "calculatedValue": "3000.00",
+            "networkIndicator": "InNetwork"
+          }
+        ]
+      },
+      "dependents": [
+        {
+          "privacyRestriction": "false",
+          "membershipIdentifier": {...},
+          "accumulators": [...]
+        }
+      ]
+    }
+  }
+}</code></pre></p>
+<p><h3>Parsed AccumulatorResponse Structure</h3></p>
+<p><pre><code class="language-python">AccumulatorResponse(
+    readAccumulatorsResponse=ReadAccumulatorsResponse(
+        memberships=Memberships(
+            subscriber=Member(
+                privacyRestriction="false",
+                membershipIdentifier=MembershipIdentifier(
+                    idSource="5",
+                    idValue="186103331+10+7+20240101+793854+8A+829",
+                    idType="memberships",
+                    resourceId="5~186103331+10+7+20240101+793854+8A+829"
+                ),
+                accumulators=[
+                    Accumulator(
+                        level="Individual",
+                        code="Deductible",
+                        currentValue=400.00,
+                        limitValue=1000.00,
+                        calculatedValue=600.00,
+                        networkIndicator="InNetwork"
+                    ),
+                    Accumulator(
+                        level="Individual",
+                        code="OOP Max",
+                        currentValue=2000.00,
+                        limitValue=5000.00,
+                        calculatedValue=3000.00,
+                        networkIndicator="InNetwork"
+                    )
+                ]
+            ),
+            dependents=[...]
+        )
+    )
+)</code></pre></p>
+<p><h3>Helper Methods in AccumulatorResponse</h3></p>
+<p><h4><strong>1. Get Member by ID</strong></h4></p>
+<p><pre><code class="language-python">def get_member_by_id(self, id: str) -> Optional[Member]:
+    # Check subscriber
+    if self.readAccumulatorsResponse.memberships.subscriber and \
+       self.readAccumulatorsResponse.memberships.subscriber.membershipIdentifier.resourceId == id:
+        return self.readAccumulatorsResponse.memberships.subscriber
+    
+    # Check dependents
+    if self.readAccumulatorsResponse.memberships.dependents:
+        for member in self.readAccumulatorsResponse.memberships.dependents:
+            if member.membershipIdentifier.resourceId == id:
+                return member
+    
+    return None</code></pre></p>
+<p><strong>Usage:</strong>
+<pre><code class="language-python">member = accumulator_response.get_member_by_id("5~186103331+...")
+if member:
+    print(f"Found {len(member.accumulators)} accumulators")</code></pre></p>
+<p><h4><strong>2. Get Accumulator by Code</strong></h4></p>
+<p><pre><code class="language-python">def get_accumulator_by_code(
+    self, 
+    code: str, 
+    network_indicator: str = "InNetwork"
+) -> Optional[Accumulator]:
+    # Search in subscriber and dependents
+    for accumulator in all_accumulators:
+        if accumulator.code == code and \
+           accumulator.networkIndicator == network_indicator:
+            return accumulator
+    return None</code></pre></p>
+<p><strong>Usage:</strong>
+<pre><code class="language-python">deductible = accumulator_response.get_accumulator_by_code("Deductible", "InNetwork")
+if deductible:
+    print(f"Deductible remaining: ${deductible.calculatedValue}")</code></pre></p>
+<p><h4><strong>3. Convenience Methods</strong></h4></p>
+<p><pre><code class="language-python"><h1>Get out-of-pocket maximum</h1>
+oopmax = accumulator_response.get_out_of_pocket_max("InNetwork")</p>
+<p><h1>Get deductible</h1>
+deductible = accumulator_response.get_deductible("InNetwork")</p>
+<p><h1>Get annual maximum</h1>
+annual_max = accumulator_response.get_annual_maximum("InNetwork")</p>
+<p><h1>Get by network</h1>
+in_network_accums = accumulator_response.get_accumulators_by_network("InNetwork")</code></pre></p>
+<p>---</p>
+<p><h2>10. Retry and Circuit Breaker Patterns</h2></p>
+<p><h3>Retry Decorator (Lines 177-181)</h3></p>
+<p><pre><code class="language-python">@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=4, max=10),
+    retry=retry_if_not_exception_type(AccumulatorNotFoundException)
+)</code></pre></p>
+<p><strong>Configuration:</strong>
+<li><strong><code>stop_after_attempt(3)</code></strong>: Try up to 3 times total</li>
+<li><strong><code>wait_exponential</code></strong>: Wait time increases exponentially</li>
+<li><strong><code>retry_if_not_exception_type</code></strong>: Don't retry if AccumulatorNotFoundException</li></p>
+<p><strong>Wait Times:</strong>
+<pre><code class="language-">Attempt 1: Immediate (0 seconds)
+Attempt 2: Wait 4-10 seconds (exponential backoff)
+Attempt 3: Wait 4-10 seconds (exponential backoff)</code></pre></p>
+<p><strong>Example Timeline:</strong>
+<pre><code class="language-">0s:  First attempt → Fails (network timeout)
+4s:  Second attempt → Fails (server error 500)
+12s: Third attempt → Success ✓</p>
+<p>Total time: 12 seconds</code></pre></p>
+<p><strong>Why Not Retry AccumulatorNotFoundException?</strong>
+<li>This exception means the request is fundamentally invalid</li>
+<li>Retrying won't help (e.g., invalid member ID)</li>
+<li>Save time by failing fast</li></p>
+<p><h3>Circuit Breaker Decorator (Line 176)</h3></p>
+<p><pre><code class="language-python">@circuit_breaker("accumulator_service")</code></pre></p>
+<p><strong>How Circuit Breaker Works:</strong></p>
+<p><pre><code class="language-">┌─────────────────────────────────────────────────────┐
+│ CLOSED STATE (Normal Operation)                     │
+│ - All requests go through                           │
+│ - Track failure rate                                │
+└──────────────┬──────────────────────────────────────┘
+               │
+         [Too many failures]
+               ↓
+┌─────────────────────────────────────────────────────┐
+│ OPEN STATE (Circuit Tripped)                        │
+│ - Immediately reject requests                       │
+│ - Return error without calling API                  │
+│ - Wait for timeout period                           │
+└──────────────┬──────────────────────────────────────┘
+               │
+         [After timeout]
+               ↓
+┌─────────────────────────────────────────────────────┐
+│ HALF-OPEN STATE (Testing)                           │
+│ - Allow one test request                            │
+│ - If success → Go to CLOSED                         │
+│ - If failure → Go back to OPEN                      │
+└─────────────────────────────────────────────────────┘</code></pre></p>
+<p><strong>Benefits:</strong>
+<li><strong>Prevent cascading failures</strong>: Don't overwhelm failing service</li>
+<li><strong>Fast fail</strong>: Return error immediately when circuit is open</li>
+<li><strong>Automatic recovery</strong>: Test service health periodically</li>
+<li><strong>System protection</strong>: Preserve resources during outages</li></p>
+<p><strong>Example Scenario:</strong>
+<pre><code class="language-">Time 0:00 - 10 requests fail → Circuit opens
+Time 0:00 - 5:00 - All requests fail fast (no API calls)
+Time 5:00 - Test request succeeds → Circuit closes
+Time 5:01 - Normal operation resumes</code></pre></p>
+<p>---</p>
+<p><h2>11. Complete Code Walkthrough</h2></p>
+<p><h3>Method: <code>get_accumulator()</code> - Line by Line</h3></p>
+<p><pre><code class="language-python"><h1>LINES 176-181: Decorators for reliability</h1>
+@circuit_breaker("accumulator_service")  # Prevent cascading failures
+@retry(
+    stop=stop_after_attempt(3),          # Max 3 attempts
+    wait=wait_exponential(multiplier=1, min=4, max=10),  # Exponential backoff
+    retry=retry_if_not_exception_type(AccumulatorNotFoundException)  # Don't retry bad requests
+)</p>
+<p><h1>LINES 182-184: Method signature</h1>
+async def get_accumulator(
+    self, 
+    request: CostEstimatorRequest,              # Input request
+    headers: Optional[Dict[str, str]] = None    # Optional headers
+) -> AccumulatorResponse:                        # Return type</p>
+<p><h1>LINES 198-200: Get API URL from environment</h1>
+ACCUMULATOR_URL = os.getenv("ACCUMULATOR_URL")
+if not ACCUMULATOR_URL:
+    raise ValueError("ACCUMULATOR_URL environment variable is not set")
+<h1>Example: "https://api.example.com/healthcare/v3/healthsparq_memberships"</h1></p>
+<p><h1>LINES 202-207: Token management</h1>
+token = SessionManager.get_token()  # Try to get existing token
+if not token:
+    # No token available, get a new one
+    token = await self.token_service.get_new_token()
+    # TODO: Fix this, since token is a dict here, not a string
+    SessionManager.set_token(token)  # Store for future use</p>
+<p><h1>LINES 209-214: Build request headers</h1>
+if isinstance(token, dict):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token['access_token']}",  # OAuth 2.0 token
+        "id_token": f"{token['id_token']}"                   # Additional identity token
+    }</p>
+<p><h1>LINES 216-217: Create HTTP session with SSL</h1>
+connector = aiohttp.TCPConnector(ssl=self.ssl_context)
+async with aiohttp.ClientSession(connector=connector) as session:
+    
+    # LINES 218-221: Make HTTP GET request
+    async with session.get(
+        url=f"{ACCUMULATOR_URL}/{request.membershipId}/accumulators?benefitProductType=Medical",
+        headers=headers
+    ) as response:
+        
+        # LINE 222: Read response text
+        response_text = await response.text()
+        
+        # LINES 224-226: Handle token expiration
+        if response.status == 401:  # Unauthorized
+            SessionManager.clear_token()
+            return await self.get_accumulator(request)  # Recursive retry
+        
+        # LINES 228-242: Handle bad request (400)
+        if response.status == 400:
+            try:
+                response_json = await response.json()
+                error_msg = (
+                    f"Accumulator request failed with status 400: "
+                    f"{response_json.get('httpMessage', 'Bad Request')} - "
+                    f"{response_json.get('moreInformation', 'Invalid request data')}"
+                )
+            except Exception:
+                error_msg = f"Accumulator request failed with status 400: {response_text}"
+            
+            logger.error(error_msg)
+            raise AccumulatorNotFoundException(
+                message=f"Status {response.status}: {error_msg}",
+                accumulator_request=request.model_dump()
+            )
+        
+        # LINES 244-258: Handle server error (500)
+        if response.status == 500:
+            try:
+                response_json = await response.json()
+                error_msg = (
+                    f"Accumulator service error with status 500: "
+                    f"{response_json.get('httpMessage', 'Internal Server Error')} - "
+                    f"{response_json.get('moreInformation', 'Service temporarily unavailable')}"
+                )
+            except Exception:
+                error_msg = f"Accumulator service error with status 500: {response_text}"
+            
+            logger.error(error_msg)
+            raise AccumulatorNotFoundException(
+                message=f"Status {response.status}: {error_msg}",
+                accumulator_request=request.model_dump()
+            )
+        
+        # LINES 260-274: Handle other errors
+        if response.status != 200:
+            try:
+                response_json = await response.json()
+                error_msg = (
+                    f"Accumulator request failed with status {response.status}: "
+                    f"{response_json.get('httpMessage', 'Request failed')} - "
+                    f"{response_json.get('moreInformation', 'Unknown error')}"
+                )
+            except Exception:
+                error_msg = f"Accumulator request failed with status {response.status}: {response_text}"
+            
+            logger.error(error_msg)
+            raise AccumulatorNotFoundException(
+                message=f"Status {response.status}: {error_msg}",
+                accumulator_request=request.model_dump()
+            )
+        
+        # LINES 275-278: Success - parse and return response
+        response_data = await response.json()
+        accumulator_response = AccumulatorResponse(**response_data)
+        return accumulator_response</p>
+<p><h1>LINES 280-287: Outer exception handling</h1>
+except AccumulatorNotFoundException:
+    raise  # Re-raise without modification
+except Exception as e:
+    logger.error(f"Error in get_accumulator: {str(e)}")
+    raise AccumulatorNotFoundException(
+        message=str(e),
+        accumulator_request=request.model_dump()
+    )</code></pre></p>
+<p>---</p>
+<p><h2>12. Real-World Examples</h2></p>
+<p><h3>Example 1: Successful Request</h3></p>
+<p><strong>Input:</strong>
+<pre><code class="language-python">request = CostEstimatorRequest(
+    membershipId="5~186103331+10+7+20240101+793854+8A+829",
+    benefitProductType="Medical",
+    zipCode="85305",
+    service=Service(code="99214", type="CPT4"),
+    providerInfo=[...]
+)</p>
+<p>accumulator_response = await accumulator_service.get_accumulator(request)</code></pre></p>
+<p><strong>Flow:</strong>
+<pre><code class="language-">1. Get ACCUMULATOR_URL: "https://api.example.com/healthcare/v3/..."
+<li>Get token from SessionManager: Valid token found ✓</li>
+<li>Build headers with Bearer token</li>
+<li>Send GET request:</li>
+   URL: https://api.example.com/.../5~186103331+.../accumulators?benefitProductType=Medical
+<li>Receive response: Status 200 OK</li>
+<li>Parse JSON response</li>
+<li>Create AccumulatorResponse object</li>
+<li>Return result</code></pre></li></p>
+<p><strong>Response:</strong>
+<pre><code class="language-python">AccumulatorResponse(
+    readAccumulatorsResponse=ReadAccumulatorsResponse(
+        memberships=Memberships(
+            subscriber=Member(
+                accumulators=[
+                    Accumulator(code="Deductible", calculatedValue=600.00),
+                    Accumulator(code="OOP Max", calculatedValue=3000.00)
+                ]
+            )
+        )
+    )
+)</code></pre></p>
+<p><strong>Usage:</strong>
+<pre><code class="language-python"><h1>Get deductible</h1>
+deductible = accumulator_response.get_deductible("InNetwork")
+print(f"Deductible remaining: ${deductible.calculatedValue}")
+<h1>Output: Deductible remaining: $600.00</h1></p>
+<p><h1>Get OOP Max</h1>
+oopmax = accumulator_response.get_out_of_pocket_max("InNetwork")
+print(f"OOP Max remaining: ${oopmax.calculatedValue}")
+<h1>Output: OOP Max remaining: $3000.00</h1></code></pre></p>
+<p><h3>Example 2: Token Expired (401)</h3></p>
+<p><strong>Scenario:</strong>
+<pre><code class="language-">Time 0:00 - Token obtained (expires at 1:00)
+Time 1:15 - Make accumulator request
+Result: Token expired!</code></pre></p>
+<p><strong>Flow:</strong>
+<pre><code class="language-">1. Get token from SessionManager: "old_expired_token"
+<li>Send request with expired token</li>
+<li>API responds: 401 Unauthorized</li>
+<li>Clear token from SessionManager</li>
+<li>Recursive call to get_accumulator()</li>
+   └─> Get new token from TokenService
+   └─> Store new token
+   └─> Retry request with new token
+<li>API responds: 200 OK ✓</li>
+<li>Return accumulator data</code></pre></li></p>
+<p><strong>Timeline:</strong>
+<pre><code class="language-">0ms:  Start request with expired token
+100ms: Receive 401 Unauthorized
+110ms: Clear old token
+120ms: Request new token from TokenService
+500ms: Receive new token
+510ms: Retry accumulator request
+700ms: Receive 200 OK with data
+Total: 700ms (automatic recovery!)</code></pre></p>
+<p><h3>Example 3: Server Error with Retry</h3></p>
+<p><strong>Scenario:</strong> External API is experiencing issues</p>
+<p><strong>Flow:</strong>
+<pre><code class="language-">Attempt 1 (0s):
+  └─> Send request
+  └─> Receive 500 Internal Server Error
+  └─> @retry decorator catches exception
+  └─> Wait 4 seconds</p>
+<p>Attempt 2 (4s):
+  └─> Send request again
+  └─> Receive 500 Internal Server Error again
+  └─> @retry decorator catches exception
+  └─> Wait 8 seconds (exponential backoff)</p>
+<p>Attempt 3 (12s):
+  └─> Send request again
+  └─> Receive 200 OK ✓
+  └─> Return data successfully</p>
+<p>Total time: 12 seconds
+Result: Success (eventually!)</code></pre></p>
+<p><h3>Example 4: Invalid Member ID (400)</h3></p>
+<p><strong>Scenario:</strong> Member doesn't exist in system</p>
+<p><strong>Flow:</strong>
+<pre><code class="language-">1. Send request with membershipId="INVALID"
+<li>API responds: 400 Bad Request</li>
+   {
+     "httpMessage": "Member not found",
+     "moreInformation": "The specified member ID does not exist"
+   }
+<li>Parse error message</li>
+<li>Log error</li>
+<li>Raise AccumulatorNotFoundException</li>
+<li>@retry decorator sees AccumulatorNotFoundException</li>
+<li>DON'T retry (configured not to retry this exception)</li>
+<li>Exception propagates to caller</li></p>
+<p>Total time: 150ms (fast fail!)</code></pre></p>
+<p>---</p>
+<p><h2>13. Performance and Reliability</h2></p>
+<p><h3>Performance Metrics</h3></p>
+<p><strong>Typical Request Timeline:</strong>
+<pre><code class="language-">Token Retrieval:     10ms (from cache)
+HTTP Request:        150ms (network + API processing)
+JSON Parsing:        5ms
+Total:              ~165ms</code></pre></p>
+<p><strong>With Token Refresh:</strong>
+<pre><code class="language-">Token Request:       400ms (OAuth flow)
+HTTP Request:        150ms
+JSON Parsing:        5ms
+Total:              ~555ms</code></pre></p>
+<p><strong>With Retry (1 failure):</strong>
+<pre><code class="language-">Attempt 1:          150ms (fails)
+Wait:               4000ms (backoff)
+Attempt 2:          150ms (succeeds)
+Total:              ~4300ms</code></pre></p>
+<p><h3>Reliability Features</h3></p>
+<p><h4><strong>1. Retry Mechanism</strong></h4>
+<li>Automatic retry on transient failures</li>
+<li>Exponential backoff prevents overwhelming failing service</li>
+<li>Maximum 3 attempts</li></p>
+<p><h4><strong>2. Circuit Breaker</strong></h4>
+<li>Protects system from cascading failures</li>
+<li>Fast fail when service is down</li>
+<li>Automatic recovery testing</li></p>
+<p><h4><strong>3. Token Management</strong></h4>
+<li>Automatic token refresh on expiration</li>
+<li>Centralized token storage</li>
+<li>Reduces token requests</li></p>
+<p><h4><strong>4. Error Handling</strong></h4>
+<li>Comprehensive status code handling</li>
+<li>Detailed error messages for debugging</li>
+<li>Preserves request context</li></p>
+<p><h4><strong>5. Logging</strong></h4>
+<li>Error logging for all failures</li>
+<li>Request/response details for debugging</li>
+<li>Integration with monitoring systems</li></p>
+<p><h3>Best Practices Implemented</h3></p>
+<p>✅ <strong>Async/Await</strong>: Non-blocking I/O for better performance
+✅ <strong>Connection Pooling</strong>: Reuse HTTP connections
+✅ <strong>SSL Configuration</strong>: Secure communication
+✅ <strong>Type Hints</strong>: Clear function signatures
+✅ <strong>Exception Handling</strong>: Graceful error recovery
+✅ <strong>Logging</strong>: Comprehensive error tracking
+✅ <strong>Retry Logic</strong>: Automatic recovery from transient failures
+✅ <strong>Circuit Breaker</strong>: System protection
+✅ <strong>Token Caching</strong>: Reduce authentication overhead</p>
+<p>---</p>
+<p><h2>Summary</h2></p>
+<p><h3>What We Learned</h3></p>
+<p><li><strong>Purpose</strong>: Fetch member accumulator data from external API</li>
+<li><strong>Key Features</strong>:</li>
+   - OAuth 2.0 authentication with automatic token refresh
+   - Retry mechanism with exponential backoff
+   - Circuit breaker for fault tolerance
+   - Comprehensive error handling
+   - Support for both JSON and XML APIs</p>
+<p><li><strong>Main Flow</strong>:</li>
+   ```
+   Get Token → Build Request → Send to API → Handle Response → Return Data
+   ```</p>
+<p><li><strong>Error Handling</strong>:</li>
+   - 401: Automatic token refresh and retry
+   - 400: Fast fail with detailed error
+   - 500: Retry with backoff
+   - Others: Retry with backoff</p>
+<p><li><strong>Reliability Patterns</strong>:</li>
+   - Retry (up to 3 attempts)
+   - Circuit Breaker (prevent cascading failures)
+   - Token Management (automatic refresh)
+   - Logging (debugging and monitoring)</p>
+<p><h3>Key Takeaways</h3></p>
+<p>✓ <strong>Resilient</strong>: Handles failures gracefully with retry and circuit breaker
+✓ <strong>Secure</strong>: OAuth 2.0 authentication with token management  
+✓ <strong>Fast</strong>: Async I/O and token caching for performance
+✓ <strong>Observable</strong>: Comprehensive logging for debugging
+✓ <strong>Maintainable</strong>: Clean code with clear separation of concerns</p>
+<p>---</p>
+<p><h2>Code Statistics</h2></p>
+<p><li><strong>Total Lines</strong>: 288</li>
+<li><strong>Main Method</strong>: <code>get_accumulator()</code> - 106 lines</li>
+<li><strong>Legacy Method</strong>: <code>get_accumulator_xml()</code> - 134 lines</li>
+<li><strong>Dependencies</strong>: 5 external libraries</li>
+<li><strong>HTTP Methods</strong>: GET (JSON), POST (XML)</li>
+<li><strong>Decorators</strong>: 2 (@circuit_breaker, @retry)</li>
+<li><strong>Exception Types</strong>: 2 custom exceptions</li>
+<li><strong>Status Codes Handled</strong>: 4 (200, 400, 401, 500)</li></p>
+<p>---</p>
+<p><strong>End of Accumulator Service Deep Dive</strong></p>
+<p></p>
+    </div>
+    <div class="footer">
+        <p><strong>Accumulator Service - Technical Documentation</strong></p>
+        <p>© 2025 | Complete Analysis of accumulator_service_impl.py</p>
+    </div>
+</body>
+</html>
