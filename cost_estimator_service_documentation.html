@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost Estimator Service Documentation</title>
+    <style>
+        @media print {
+            body {
+                font-size: 10pt;
+            }
+            h1 {
+                page-break-before: always;
+                margin-top: 0;
+            }
+            h1:first-of-type {
+                page-break-before: auto;
+            }
+            pre {
+                page-break-inside: avoid;
+            }
+            table {
+                page-break-inside: avoid;
+            }
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            background: #fff;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-top: 40px;
+            font-size: 2.5em;
+        }
+        
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 8px;
+            margin-top: 30px;
+            font-size: 2em;
+        }
+        
+        h3 {
+            color: #2980b9;
+            margin-top: 25px;
+            font-size: 1.5em;
+        }
+        
+        h4 {
+            color: #16a085;
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+        
+        code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        
+        pre code {
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        blockquote {
+            border-left: 4px solid #3498db;
+            padding-left: 20px;
+            margin: 20px 0;
+            color: #555;
+            font-style: italic;
+        }
+        
+        .page-header {
+            text-align: center;
+            padding: 40px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            margin-bottom: 40px;
+        }
+        
+        .page-header h1 {
+            color: white;
+            border: none;
+            font-size: 3em;
+            margin: 0;
+        }
+        
+        .page-header p {
+            font-size: 1.2em;
+            margin-top: 10px;
+        }
+        
+        .toc {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .toc h2 {
+            margin-top: 0;
+            border: none;
+        }
+        
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .toc li {
+            margin: 5px 0;
+        }
+        
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .warning {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <h1>Cost Estimator Calc Service</h1>
+        <p>Complete Technical Documentation</p>
+        <p style="font-size: 0.9em; margin-top: 20px;">Version 1.0 | October 1, 2025</p>
+    </div>
+    
+    <div class="content">
+        <p><h1>Cost Estimator Calc Service - Technical Documentation</h1></p>
+<p><h2>Executive Summary</h2></p>
+<p>The <strong>Cost Estimator Calc Service</strong> is a FastAPI-based microservice designed to calculate healthcare cost estimates for members based on their insurance benefits, accumulators, and negotiated provider rates. The service implements a sophisticated calculation engine using the Chain of Responsibility pattern to handle complex insurance scenarios including deductibles, copays, coinsurance, out-of-pocket maximums, and benefit limitations.</p>
+<p>---</p>
+<p><h2>Table of Contents</h2></p>
+<p><li><a href="#system-overview">System Overview</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#core-components">Core Components</a></li>
+<li><a href="#request-flow">Request Flow</a></li>
+<li><a href="#calculation-chain">Calculation Chain</a></li>
+<li><a href="#key-features">Key Features</a></li>
+<li><a href="#external-integrations">External Integrations</a></li>
+<li><a href="#database-layer">Database Layer</a></li>
+<li><a href="#api-endpoints">API Endpoints</a></li>
+<li><a href="#error-handling">Error Handling</a></li>
+<li><a href="#testing-strategy">Testing Strategy</a></li>
+<li><a href="#deployment">Deployment</a></li></p>
+<p>---</p>
+<p><h2>1. System Overview</h2></p>
+<p><h3>Purpose</h3>
+The Cost Estimator Service calculates the estimated out-of-pocket cost a member will pay for a healthcare service by:
+<li>Fetching member benefit information from the Benefit Service</li>
+<li>Retrieving accumulator data (deductibles, OOP max, limits) from the Accumulator Service</li>
+<li>Looking up negotiated rates from Google Cloud Spanner database</li>
+<li>Applying complex insurance calculation logic through a handler chain</li>
+<li>Returning the highest member pay amount among all applicable benefits</li></p>
+<p><h3>Technology Stack</h3>
+<li><strong>Framework</strong>: FastAPI (Python 3.10+)</li>
+<li><strong>Database</strong>: Google Cloud Spanner</li>
+<li><strong>External Services</strong>: Benefit API, Accumulator API</li>
+<li><strong>Security</strong>: OAuth 2.0 Token-based authentication</li>
+<li><strong>Deployment</strong>: Docker/Kubernetes</li>
+<li><strong>Testing</strong>: Pytest, Behave (BDD)</li></p>
+<p>---</p>
+<p><h2>2. Architecture</h2></p>
+<p><h3>High-Level Architecture</h3></p>
+<p><pre><code class="language-">┌──────────────┐
+│   Client     │
+│  Application │
+└──────┬───────┘
+       │
+       │ POST /api/v1/rate
+       ▼
+┌─────────────────────────────────────────────────────┐
+│              FastAPI Application                     │
+│  ┌─────────────────────────────────────────────┐   │
+│  │         Cost Estimation Service              │   │
+│  │                                              │   │
+│  │  ┌──────────────┐  ┌──────────────┐        │   │
+│  │  │   Benefit    │  │ Accumulator  │        │   │
+│  │  │   Service    │  │   Service    │        │   │
+│  │  └──────────────┘  └──────────────┘        │   │
+│  │                                              │   │
+│  │  ┌────────────────────────────────────┐    │   │
+│  │  │    Calculation Service             │    │   │
+│  │  │  (Chain of Responsibility)         │    │   │
+│  │  └────────────────────────────────────┘    │   │
+│  │                                              │   │
+│  │  ┌────────────────────────────────────┐    │   │
+│  │  │    Repository Layer                │    │   │
+│  │  └────────────────────────────────────┘    │   │
+│  └─────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+       │                    │                  │
+       ▼                    ▼                  ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│   Benefit    │  │ Accumulator  │  │   Spanner    │
+│     API      │  │     API      │  │   Database   │
+└──────────────┘  └──────────────┘  └──────────────┘</code></pre></p>
+<p><h3>Layer Architecture</h3></p>
+<p><strong>1. API Layer (<code>app/api/</code>)</strong>
+<li>Handles HTTP requests/responses</li>
+<li>Request validation using Pydantic</li>
+<li>Header processing and logging</li>
+<li>Route management</li></p>
+<p><strong>2. Service Layer (<code>app/services/</code>)</strong>
+<li>Business logic orchestration</li>
+<li>Parallel API calls to external services</li>
+<li>Calculation coordination</li>
+<li>Token management</li></p>
+<p><strong>3. Handler Layer (<code>app/services/handlers/</code>)</strong>
+<li>Chain of Responsibility pattern</li>
+<li>Insurance calculation logic</li>
+<li>Benefit evaluation</li>
+<li>Accumulator processing</li></p>
+<p><strong>4. Repository Layer (<code>app/repository/</code>)</strong>
+<li>Database access abstraction</li>
+<li>Rate lookups</li>
+<li>Query execution</li>
+<li>Circuit breaker implementation</li></p>
+<p><strong>5. Data Layer (<code>app/schemas/</code>, <code>app/models/</code>)</strong>
+<li>Request/Response models</li>
+<li>Data validation</li>
+<li>Type definitions</li></p>
+<p>---</p>
+<p><h2>3. Core Components</h2></p>
+<p><h3>3.1 Main Application (<code>app/main.py</code>)</h3></p>
+<p><strong>Responsibilities:</strong>
+<li>FastAPI application initialization</li>
+<li>Router registration</li>
+<li>Exception handling setup</li>
+<li>Background tasks for cache refresh and token renewal</li></p>
+<p><strong>Key Features:</strong>
+<pre><code class="language-python"><h1>Token refresh every hour</h1>
+async def refresh_token_every_hour():
+    while True:
+        await get_token()
+        await asyncio.sleep(3540)  # 59 minutes</p>
+<p><h1>Cache refresh every 24 hours</h1>
+async def refresh_cache_every_24_hours():
+    while True:
+        await cost_estimation_service.load_payment_method_hierarchy()
+        await cost_estimation_service.load_pcp_specialty_codes()
+        await asyncio.sleep(86400)  # 24 hours</code></pre></p>
+<p><h3>3.2 Cost Estimation Service</h3></p>
+<p><strong>File:</strong> <code>app/services/impl/cost_estimation_service_impl.py</code></p>
+<p><strong>Main Method: <code>estimate_cost()</code></strong>
+<pre><code class="language-python">async def estimate_cost(self, request: CostEstimatorRequest) -> dict:
+    1. Map request to benefit request and rate criteria
+    2. Parallel execution:
+       - Call Benefit Service
+       - Call Accumulator Service
+       - Fetch rate from database
+    3. Match benefits with accumulators
+    4. Run calculation chain on matched benefits
+    5. Return highest member pay result</code></pre></p>
+<p><strong>Parallel Execution:</strong>
+<pre><code class="language-python"><h1>Uses asyncio.gather for concurrent API calls</h1>
+benefit_response, accumulator_response, rate = await asyncio.gather(
+    benefit_service.get_benefit(benefit_request),
+    accumulator_service.get_accumulator(request),
+    repository.get_rate(rate_criteria)
+)</code></pre></p>
+<p><h3>3.3 Calculation Service</h3></p>
+<p><strong>File:</strong> <code>app/services/impl/calculation_service_impl.py</code></p>
+<p><strong>Purpose:</strong> Processes multiple benefits through the calculation chain and finds the one with the highest member pay.</p>
+<p><strong>Algorithm:</strong>
+<pre><code class="language-python">def find_highest_member_pay(service_amount, benefits):
+    results = []
+    
+    for benefit in benefits:
+        # Create insurance context from benefit
+        context = InsuranceContext().populate_from_benefit(benefit, service_amount)
+        
+        # Process through handler chain
+        processed_context = chain.handle(context)
+        results.append(processed_context)
+    
+    # Return context with highest member_pays
+    return max(results, key=lambda ctx: ctx.member_pays)</code></pre></p>
+<p><h3>3.4 Insurance Context (<code>app/core/base.py</code>)</h3></p>
+<p><strong>Purpose:</strong> Container for all data needed during calculation.</p>
+<p><strong>Key Fields:</strong>
+<pre><code class="language-python">@dataclass
+class InsuranceContext:
+    # Input
+    service_amount: float
+    is_service_covered: bool
+    
+    # Benefit data
+    cost_share_copay: float
+    cost_share_coinsurance: float
+    copay_applies_oop: bool
+    coins_applies_oop: bool
+    deductible_applies_oop: bool
+    is_deductible_before_copay: bool
+    
+    # Accumulator data
+    oopmax_individual_calculated: float
+    oopmax_family_calculated: float
+    deductible_individual_calculated: float
+    deductible_family_calculated: float
+    limit_calculated: float
+    
+    # Results
+    member_pays: float
+    calculation_complete: bool</code></pre></p>
+<p>---</p>
+<p><h2>4. Request Flow</h2></p>
+<p><h3>Complete Request-Response Flow</h3></p>
+<p><pre><code class="language-">1. Client sends POST /api/v1/rate request
+   ↓
+<li>FastAPI validates request with Pydantic</li>
+   ↓
+<li>Request handler calls CostEstimationService.estimate_cost()</li>
+   ↓
+<li>Service maps request to:</li>
+   - BenefitRequest (for Benefit API)
+   - RateCriteria (for database lookup)
+   ↓
+<li><strong>PARALLEL EXECUTION</strong> (asyncio.gather):</li>
+   ├── Benefit Service → External Benefit API
+   ├── Accumulator Service → External Accumulator API
+   └── Repository → Spanner Database
+   ↓
+<li>Match benefits with accumulators</li>
+   ↓
+<li>For each matched benefit:</li>
+   ├── Create InsuranceContext
+   ├── Populate with benefit + accumulator data
+   └── Process through Calculation Chain
+   ↓
+<li>Find context with highest member_pays</li>
+   ↓
+<li>Build response with:</li>
+   - Rate
+   - Member pays amount
+   - Benefit response
+   - Accumulator response
+   - Calculation details
+   ↓
+<li>Return JSON response to client</code></pre></li></p>
+<p><h3>Example Request</h3>
+<pre><code class="language-json">{
+  "membershipId": "5~186103331+10+7+20240101+793854+8A+829",
+  "zipCode": "85305",
+  "benefitProductType": "Medical",
+  "languageCode": "11",
+  "service": {
+    "code": "99214",
+    "type": "CPT4",
+    "description": "Adult Office visit",
+    "placeOfService": {"code": "11"}
+  },
+  "providerInfo": [{
+    "serviceLocation": "000761071",
+    "providerType": "HO",
+    "specialty": {"code": "91017"},
+    "providerNetworks": {"networkID": "58921"},
+    "providerIdentificationNumber": "0004000317"
+  }]
+}</code></pre></p>
+<p>---</p>
+<p><h2>5. Calculation Chain</h2></p>
+<p><h3>Chain of Responsibility Pattern</h3></p>
+<p>The calculation engine uses the <strong>Chain of Responsibility</strong> design pattern, where each handler:
+<li>Processes specific calculation logic</li>
+<li>Decides whether to continue or stop</li>
+<li>Passes context to the next handler if needed</li></p>
+<p><h3>Handler Hierarchy</h3></p>
+<p><pre><code class="language-">ServiceCoverageHandler
+  └─► Is service covered?
+      ├─ No → member_pays = service_amount, STOP
+      └─ Yes → Continue
+          │
+          └─► BenefitLimitationHandler
+              └─► Has benefit limit?
+                  ├─ Yes → Apply limit logic, STOP/CONTINUE
+                  └─ No → Continue
+                      │
+                      └─► OOPMaxHandler
+                          └─► Is OOPMax met?
+                              ├─ Yes → Apply OOPMax logic, STOP
+                              └─ No → Continue
+                                  │
+                                  └─► DeductibleHandler
+                                      └─► Is deductible met?
+                                          ├─ No → Apply deductible, STOP
+                                          └─ Yes → Continue
+                                              │
+                                              └─► CostShareCoPayHandler
+                                                  └─► Apply copay/coinsurance</code></pre></p>
+<p><h3>10 Handlers in the Chain</h3></p>
+<p><h4>1. <strong>ServiceCoverageHandler</strong></h4>
+<pre><code class="language-python"><h1>First check: Is the service covered?</h1>
+if not is_service_covered:
+    member_pays = service_amount
+    insurance_pays = 0
+    STOP</code></pre></p>
+<p><h4>2. <strong>BenefitLimitationHandler</strong></h4>
+<pre><code class="language-python"><h1>Check if benefit has usage limits (e.g., 1 visit per year)</h1>
+if has_limit:
+    if limit_reached:
+        member_pays = service_amount  # Member pays all
+    elif service_amount > remaining_limit:
+        member_pays = service_amount - remaining_limit  # Partial coverage
+    else:
+        insurance_pays = service_amount  # Within limit</code></pre></p>
+<p><h4>3. <strong>OOPMaxHandler</strong></h4>
+<pre><code class="language-python"><h1>Check if Out-of-Pocket Maximum is met</h1>
+min_oopmax = min(oopmax_individual, oopmax_family)
+if min_oopmax <= 0:
+    member_pays = 0  # OOPMax met, insurance covers all
+    STOP</code></pre></p>
+<p><h4>4. <strong>OOPMaxCopayHandler</strong></h4>
+<pre><code class="language-python"><h1>Handle copay when OOPMax is close to being met</h1>
+if copay_continues_after_oopmax_met:
+    if remaining_oopmax < copay:
+        member_pays = remaining_oopmax + remaining_copay
+    else:
+        member_pays = copay</code></pre></p>
+<p><h4>5. <strong>DeductibleHandler</strong></h4>
+<pre><code class="language-python"><h1>Check if deductible is met</h1>
+min_deductible = min(deductible_individual, deductible_family)
+if min_deductible > 0:
+    # Deductible not met
+    if service_amount <= min_deductible:
+        member_pays = service_amount  # Member pays all towards deductible
+    else:
+        member_pays = min_deductible  # Member pays remaining deductible
+    STOP or CONTINUE based on is_deductible_before_copay</code></pre></p>
+<p><h4>6. <strong>DeductibleOOPMaxHandler</strong></h4>
+<pre><code class="language-python"><h1>Handle scenario where both deductible and OOPMax apply</h1>
+if service_amount <= min_deductible:
+    member_pays = service_amount
+    update_deductible_and_oopmax()
+else:
+    member_pays = min_deductible
+    update_deductible_and_oopmax()
+    # Continue to copay/coinsurance</code></pre></p>
+<p><h4>7. <strong>DeductibleCostShareCoPayHandler</strong></h4>
+<pre><code class="language-python"><h1>Apply cost sharing when deductible needs to be considered</h1>
+if is_deductible_before_copay:
+    # Apply deductible first, then copay
+    pass_to_deductible_handler()
+else:
+    # Apply copay/coinsurance directly
+    pass_to_cost_share_handler()</code></pre></p>
+<p><h4>8. <strong>CostShareCoPayHandler</strong></h4>
+<pre><code class="language-python"><h1>Apply copay and/or coinsurance after deductible is met</h1>
+if has_copay and has_coinsurance:
+    member_pays = copay + (service_amount - copay) * coinsurance%
+elif has_copay:
+    member_pays = min(copay, service_amount)
+elif has_coinsurance:
+    member_pays = service_amount * coinsurance%</code></pre></p>
+<p><h4>9. <strong>DeductibleCoPayHandler</strong></h4>
+<pre><code class="language-python"><h1>Handle copay in deductible scenarios</h1>
+if copay_counts_to_deductible:
+    apply_copay_to_deductible()
+if copay_continues_when_deductible_met:
+    continue_charging_copay()</code></pre></p>
+<p><h4>10. <strong>DeductibleCoInsuranceHandler</strong></h4>
+<pre><code class="language-python"><h1>Apply coinsurance in deductible scenarios</h1>
+coinsurance_amount = remaining_service_amount * coinsurance%
+member_pays += coinsurance_amount
+update_oopmax_if_applies()</code></pre></p>
+<p><h3>Calculation Flow Decision Tree</h3></p>
+<p><pre><code class="language-">Start
+  │
+  ├─ Service Not Covered? → YES → member_pays = service_amount → END
+  │                       → NO ↓
+  │
+  ├─ Has Benefit Limit? → YES → Check limit remaining → Apply limit logic
+  │                     → NO ↓
+  │
+  ├─ OOPMax Met? → YES → member_pays = 0 or minimal → END
+  │              → NO ↓
+  │
+  ├─ Deductible Met? → NO → member_pays += deductible_amount → Check if continues
+  │                  → YES ↓
+  │
+  ├─ Has Copay? → YES → member_pays += copay_amount
+  │             → NO ↓
+  │
+  ├─ Has Coinsurance? → YES → member_pays += service * coinsurance%
+  │                   → NO ↓
+  │
+  └─ Calculate Final Amount → Apply OOPMax updates → END</code></pre></p>
+<p>---</p>
+<p><h2>6. Key Features</h2></p>
+<p><h3>6.1 Parallel Processing</h3>
+<pre><code class="language-python"><h1>Concurrent calls to external services</h1>
+async with asyncio.TaskGroup() as tg:
+    benefit_task = tg.create_task(benefit_service.get_benefit())
+    accumulator_task = tg.create_task(accumulator_service.get_accumulator())
+    rate_task = tg.create_task(repository.get_rate())</code></pre></p>
+<p><strong>Benefits:</strong>
+<li>Reduces total API response time</li>
+<li>Improves user experience</li>
+<li>Efficient resource utilization</li></p>
+<p><h3>6.2 Token Management</h3>
+<pre><code class="language-python"><h1>Automatic token refresh every hour</h1>
+class SessionManager:
+    _token = None
+    
+    @classmethod
+    def set_token(cls, token_data):
+        cls._token = token_data
+    
+    @classmethod
+    def get_token(cls):
+        return cls._token</code></pre></p>
+<p><h3>6.3 Circuit Breaker Pattern</h3>
+<pre><code class="language-python">@circuit_breaker("rate_repository")
+@retry(stop=stop_after_attempt(3), 
+       wait=wait_exponential(multiplier=1, min=4, max=10))
+async def get_rate(self, rate_criteria):
+    # Database call with automatic retry and circuit breaking</code></pre></p>
+<p><strong>Benefits:</strong>
+<li>Prevents cascade failures</li>
+<li>Automatic retry with exponential backoff</li>
+<li>System resilience</li></p>
+<p><h3>6.4 Benefit-Accumulator Matching</h3>
+<pre><code class="language-python">def match_benefits_with_accumulators(benefits, accumulators):
+    matched_benefits = []
+    
+    for benefit in benefits:
+        # Match by network, code, level
+        matched_accums = find_matching_accumulators(
+            benefit, 
+            accumulators, 
+            network=benefit.networkCategory
+        )
+        
+        if matched_accums:
+            benefit.coverage.matchedAccumulators = matched_accums
+            matched_benefits.append(benefit)
+    
+    return matched_benefits</code></pre></p>
+<p><h3>6.5 Caching</h3>
+<pre><code class="language-python"><h1>Payment method hierarchy cache (refreshed every 24 hours)</h1>
+async def load_payment_method_hierarchy(self):
+    query = "SELECT * FROM payment_method_hierarchy"
+    results = await self.db.execute_query(query)
+    self._cache[PAYMENT_METHOD_HIERARCHY_CACHE_KEY] = results</code></pre></p>
+<p>---</p>
+<p><h2>7. External Integrations</h2></p>
+<p><h3>7.1 Benefit Service Integration</h3></p>
+<p><strong>Endpoint:</strong> <code>POST https://benefit-api.com/servicesbenefits/retrieve</code></p>
+<p><strong>Purpose:</strong> Fetch member benefit information</p>
+<p><strong>Request Mapping:</strong>
+<pre><code class="language-python">def to_benefit_request(cost_request):
+    return BenefitRequest(
+        benefitProductType=cost_request.benefitProductType,
+        membershipID=cost_request.membershipId,
+        planIdentifier="3~",
+        serviceInfo=[{
+            "serviceCodeInfo": {
+                "code": cost_request.service.code,
+                "type": cost_request.service.type,
+                "providerType": [{"code": provider.providerType}],
+                "placeOfService": [{"code": cost_request.service.placeOfService.code}]
+            }
+        }]
+    )</code></pre></p>
+<p><strong>Response Data:</strong>
+<li>Benefit details (copay, coinsurance, deductible)</li>
+<li>Coverage information</li>
+<li>Network category</li>
+<li>Service provider details</li></p>
+<p><h3>7.2 Accumulator Service Integration</h3></p>
+<p><strong>Endpoint:</strong> <code>GET https://accumulator-api.com/memberships/{id}/accumulators</code></p>
+<p><strong>Purpose:</strong> Retrieve current accumulator values</p>
+<p><strong>Query Parameters:</strong>
+<pre><code class="language-python">params = {
+    "benefitProductType": "Medical",
+    "networkType": "InNetwork"
+}</code></pre></p>
+<p><strong>Response Data:</strong>
+<li>Deductible (Individual/Family)</li>
+<li>Out-of-Pocket Maximum (Individual/Family)</li>
+<li>Benefit Limits</li>
+<li>Current values and remaining amounts</li></p>
+<p><h3>7.3 Authentication</h3></p>
+<p><strong>OAuth 2.0 Token Flow:</strong>
+<pre><code class="language-python">class TokenService:
+    async def get_new_token(self):
+        # Call token endpoint
+        response = await http_client.post(
+            TOKEN_URL,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET
+            }
+        )
+        
+        return response.json()  # access_token, expires_in</code></pre></p>
+<p>---</p>
+<p><h2>8. Database Layer</h2></p>
+<p><h3>8.1 Google Cloud Spanner</h3></p>
+<p><strong>Configuration:</strong>
+<pre><code class="language-python">class SpannerConfig:
+    project_id: str = os.getenv("SPANNER_PROJECT_ID")
+    instance_id: str = os.getenv("SPANNER_INSTANCE_ID")
+    database_id: str = os.getenv("SPANNER_DATABASE_ID")</code></pre></p>
+<p><h3>8.2 Rate Lookup Strategy</h3></p>
+<p><strong>Hierarchical Rate Lookup:</strong></p>
+<p><pre><code class="language-">1. Claim-Based Rate (highest priority)
+   ↓ (if not found)
+<li>Provider Information Lookup</li>
+   ↓
+<li>Contract Type Determination</li>
+   ↓
+<li>Standard Rate or Non-Standard Rate</li>
+   ↓ (if not found)
+<li>Default Rate (last resort)</code></pre></li></p>
+<p><strong>Query Example:</strong>
+<pre><code class="language-sql">SELECT 
+    rate_amount, 
+    rate_type, 
+    payment_method_code
+FROM 
+    negotiated_rates
+WHERE 
+    provider_id = @provider_id
+    AND service_code = @service_code
+    AND network_id = @network_id
+    AND effective_date <= @service_date
+    AND (expiration_date IS NULL OR expiration_date >= @service_date)
+ORDER BY 
+    rate_priority DESC
+LIMIT 1</code></pre></p>
+<p><h3>8.3 Rate Types</h3></p>
+<p><strong>1. Percentage Rate:</strong>
+<pre><code class="language-python">if payment_method_code in PERCENTAGE_PAYMENT_METHOD_CODES:
+    # Rate is a percentage of billed amount
+    actual_rate = service_amount * (rate_amount / 100)</code></pre></p>
+<p><strong>2. Amount Rate:</strong>
+<pre><code class="language-python">else:
+    # Rate is a fixed dollar amount
+    actual_rate = rate_amount</code></pre></p>
+<p>---</p>
+<p><h2>9. API Endpoints</h2></p>
+<p><h3>9.1 POST /api/v1/rate</h3></p>
+<p><strong>Purpose:</strong> Calculate cost estimate</p>
+<p><strong>Request Headers:</strong>
+<pre><code class="language-">Content-Type: application/json
+x-global-transaction-id: <correlation-id>
+x-clientrefid: <client-reference-id></code></pre></p>
+<p><strong>Response Structure:</strong>
+<pre><code class="language-json">{
+  "status": "success",
+  "rate": 150.00,
+  "member_pays": 50.00,
+  "insurance_pays": 100.00,
+  "benefit_response": { /* Benefit API response */ },
+  "accumulator_response": { /* Accumulator API response */ },
+  "calculation_details": {
+    "benefit_id": "BEN123",
+    "copay": 25.00,
+    "coinsurance": 0.20,
+    "deductible_applied": 25.00,
+    "oopmax_remaining": 2500.00
+  }
+}</code></pre></p>
+<p><h3>9.2 POST /api/v1/rate-only</h3></p>
+<p><strong>Purpose:</strong> Get negotiated rate without calculation</p>
+<p><strong>Response:</strong>
+<pre><code class="language-json">{
+  "rates": [
+    {
+      "provider_id": "0004000317",
+      "service_code": "99214",
+      "rate": 150.00,
+      "rate_type": "Amount",
+      "contract_type": "Standard"
+    }
+  ]
+}</code></pre></p>
+<p><h3>9.3 GET /health</h3></p>
+<p><strong>Purpose:</strong> Health check endpoint</p>
+<p><strong>Response:</strong>
+<pre><code class="language-json">{
+  "status": "healthy",
+  "version": "1.0.0",
+  "timestamp": "2025-10-01T12:00:00Z"
+}</code></pre></p>
+<p>---</p>
+<p><h2>10. Error Handling</h2></p>
+<p><h3>Exception Hierarchy</h3></p>
+<p><pre><code class="language-python">class CostEstimatorException(Exception):
+    """Base exception"""</p>
+<p>class BenefitServiceException(CostEstimatorException):
+    """Benefit API errors"""</p>
+<p>class AccumulatorServiceException(CostEstimatorException):
+    """Accumulator API errors"""</p>
+<p>class DatabaseException(CostEstimatorException):
+    """Database errors"""</p>
+<p>class ValidationException(CostEstimatorException):
+    """Request validation errors"""</code></pre></p>
+<p><h3>Global Exception Handler</h3></p>
+<p><pre><code class="language-python">@app.exception_handler(CostEstimatorException)
+async def custom_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "status": "error",
+            "error_code": exc.error_code,
+            "message": exc.message,
+            "timestamp": datetime.now().isoformat()
+        }
+    )</code></pre></p>
+<p><h3>HTTP Status Codes</h3></p>
+<p>| Code | Description | When Used |
+|------|-------------|-----------|
+| 200 | OK | Successful calculation |
+| 400 | Bad Request | Invalid input |
+| 401 | Unauthorized | Authentication failure |
+| 422 | Unprocessable Entity | Validation error |
+| 500 | Internal Server Error | Unexpected error |
+| 502 | Bad Gateway | External service failure |
+| 503 | Service Unavailable | System overload |
+| 504 | Gateway Timeout | External service timeout |</p>
+<p>---</p>
+<p><h2>11. Testing Strategy</h2></p>
+<p><h3>11.1 Unit Tests</h3></p>
+<p><strong>Location:</strong> <code>tests/services/</code>, <code>tests/handlers/</code></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">def test_service_coverage_handler():
+    context = InsuranceContext(
+        service_amount=100.0,
+        is_service_covered=False
+    )
+    
+    handler = ServiceCoverageHandler()
+    result = handler.handle(context)
+    
+    assert result.member_pays == 100.0
+    assert result.calculation_complete == True</code></pre></p>
+<p><h3>11.2 Integration Tests</h3></p>
+<p><strong>Location:</strong> <code>tests/api/</code></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">@pytest.mark.asyncio
+async def test_estimate_cost_endpoint():
+    request = CostEstimatorRequest(...)
+    
+    with mock.patch('benefit_service.get_benefit'):
+        with mock.patch('accumulator_service.get_accumulator'):
+            response = await client.post("/api/v1/rate", json=request.dict())
+            
+    assert response.status_code == 200
+    assert "rate" in response.json()</code></pre></p>
+<p><h3>11.3 BDD Tests (Behave)</h3></p>
+<p><strong>Location:</strong> <code>tests/features/</code></p>
+<p><strong>Example Feature:</strong>
+<pre><code class="language-gherkin">Feature: Copay Calculation</p>
+<p>  Scenario: Apply copay when deductible is met
+    Given a member with medical benefits
+    And the member has met their deductible
+    And the copay is $25.00
+    When a service amount of $150 is processed
+    Then the member pays $25.00
+    And the insurance pays $125.00</code></pre></p>
+<p><h3>11.4 Scenario-Based Testing</h3></p>
+<p><strong>CSV-Driven Test Framework:</strong>
+<li>49 test scenarios covering all calculation paths</li>
+<li>Scenarios defined in CSV files by category:</li>
+  - Service Coverage (2 scenarios)
+  - Benefit Limitations (5 scenarios)
+  - OOPMax (6 scenarios)
+  - Deductible (19 scenarios)
+  - Copay (11 scenarios)
+  - Coinsurance (6 scenarios)</p>
+<p><strong>Dynamic Test Generation:</strong>
+<pre><code class="language-python"><h1>Tests are automatically generated from CSV</h1>
+for scenario in scenarios:
+    test_func = create_test_function(scenario)
+    globals()[f"test_scenario_{scenario.id}"] = test_func</code></pre></p>
+<p>---</p>
+<p><h2>12. Deployment</h2></p>
+<p><h3>12.1 Docker</h3></p>
+<p><strong>Dockerfile:</strong>
+<pre><code class="language-dockerfile">FROM python:3.10-slim</p>
+<p>WORKDIR /app</p>
+<p>COPY Pipfile Pipfile.lock ./
+RUN pip install pipenv && pipenv install --system --deploy</p>
+<p>COPY app/ ./app/</p>
+<p>CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre></p>
+<p><h3>12.2 Kubernetes</h3></p>
+<p><strong>Deployment Configuration:</strong>
+<pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cost-estimator-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cost-estimator
+  template:
+    spec:
+      containers:
+      - name: cost-estimator
+        image: cost-estimator:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: SPANNER_PROJECT_ID
+          valueFrom:
+            secretKeyRef:
+              name: spanner-config
+              key: project-id</code></pre></p>
+<p><h3>12.3 CI/CD Pipeline</h3></p>
+<p><strong>Jenkinsfile:</strong>
+<pre><code class="language-groovy">pipeline {
+    stages {
+        stage('Test') {
+            steps {
+                sh 'pipenv run pytest'
+                sh 'pipenv run behave'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'docker build -t cost-estimator:${BUILD_NUMBER} .'
+            }
+        }
+        stage('Deploy') {
+            steps {
+                sh 'kubectl apply -f k8s/'
+            }
+        }
+    }
+}</code></pre></p>
+<p>---</p>
+<p><h2>Appendix A: Key Calculation Scenarios</h2></p>
+<p><h3>Scenario 1: No Deductible, Simple Copay</h3>
+<pre><code class="language-">Service Amount: $900
+Deductible: $0 (met)
+Copay: $25
+Coinsurance: 0%</p>
+<p>Result: Member Pays = $25</code></pre></p>
+<p><h3>Scenario 2: Deductible Not Met</h3>
+<pre><code class="language-">Service Amount: $900
+Remaining Deductible: $500
+Copay: $25
+Coinsurance: 20%</p>
+<p>Calculation:
+<li>Apply deductible: $500</li>
+<li>Remaining: $400</li>
+<li>Apply coinsurance: $400 * 20% = $80</li></p>
+<p>Result: Member Pays = $580</code></pre></p>
+<p><h3>Scenario 3: OOPMax Met</h3>
+<pre><code class="language-">Service Amount: $900
+OOPMax Family: $0 (met)
+Copay: $100</p>
+<p>Result: Member Pays = $0 (OOPMax met, no copay)</code></pre></p>
+<p><h3>Scenario 4: Benefit Limit Partial</h3>
+<pre><code class="language-">Service Amount: $900
+Benefit Limit Remaining: $600
+Copay: $25</p>
+<p>Calculation:
+<li>Insurance covers: $600 (limit)</li>
+<li>Member pays excess: $900 - $600 = $300</li></p>
+<p>Result: Member Pays = $300</code></pre></p>
+<p><h3>Scenario 5: Complex - Deductible + Copay + OOPMax</h3>
+<pre><code class="language-">Service Amount: $900
+Remaining Deductible: $500
+Copay: $100
+Remaining OOPMax: $70
+Copay continues after OOPMax: No</p>
+<p>Calculation:
+<li>Apply deductible: $500 → member_pays = $500</li>
+<li>Remaining amount: $400</li>
+<li>Copay = $100, but OOPMax remaining = $70</li>
+<li>Member pays: min(copay, remaining_oopmax) = $70</li></p>
+<p>Result: Member Pays = $570 ($500 deductible + $70 OOPMax)</code></pre></p>
+<p>---</p>
+<p><h2>Appendix B: Project Structure</h2></p>
+<p><pre><code class="language-">cost-estimator-calc-service/
+├── app/
+│   ├── api/
+│   │   ├── router.py                    # Main API router
+│   │   ├── routes/
+│   │   │   └── index.py                 # Health check routes
+│   │   └── v1/
+│   │       └── routes/
+│   │           └── requests.py          # Cost estimation endpoints
+│   ├── config/
+│   │   ├── database_config.py           # Spanner configuration
+│   │   ├── queries.py                   # SQL query definitions
+│   │   └── queries/                     # SQL files
+│   ├── core/
+│   │   ├── base.py                      # Handler base class, InsuranceContext
+│   │   ├── constants.py                 # Application constants
+│   │   ├── logger.py                    # Logging configuration
+│   │   ├── session_manager.py           # Token management
+│   │   ├── service_factory.py           # Dependency injection
+│   │   └── circuitbreaker/
+│   │       └── circuit_breaker.py       # Circuit breaker implementation
+│   ├── database/
+│   │   └── spanner_client.py            # Spanner database client
+│   ├── exception/
+│   │   ├── exceptions.py                # Custom exceptions
+│   │   └── exception_handler.py         # Global exception handling
+│   ├── mappers/
+│   │   └── cost_estimator_mapper.py     # Request/Response mapping
+│   ├── models/
+│   │   ├── rate_criteria.py             # Rate lookup models
+│   │   └── selected_benefit.py          # Benefit models
+│   ├── repository/
+│   │   ├── cost_estimator_repository.py # Repository interface
+│   │   └── impl/
+│   │       └── cost_estimator_repository_impl.py  # Repository implementation
+│   ├── schemas/
+│   │   ├── cost_estimator_request.py    # Request schema
+│   │   ├── benefit_request.py           # Benefit API request
+│   │   ├── benefit_response.py          # Benefit API response
+│   │   ├── accumulator_request.py       # Accumulator API request
+│   │   └── accumulator_response.py      # Accumulator API response
+│   ├── services/
+│   │   ├── cost_estimation_service.py   # Service interface
+│   │   ├── calculation_service.py       # Calculation interface
+│   │   ├── benefit_service.py           # Benefit service interface
+│   │   ├── accumulator_service.py       # Accumulator service interface
+│   │   ├── token_service.py             # Token service
+│   │   ├── benefit_accumulator_matcher_service.py  # Matching logic
+│   │   ├── handlers/                    # Calculation handlers
+│   │   │   ├── service_coverage_handler.py
+│   │   │   ├── benefit_limitation_handler.py
+│   │   │   ├── oopmax_handler.py
+│   │   │   ├── oopmax_co_pay_handler.py
+│   │   │   ├── deductible_handler.py
+│   │   │   ├── deductible_oopmax_handler.py
+│   │   │   ├── deductible_co_pay_handler.py
+│   │   │   ├── deductible_co_insurance_handler.py
+│   │   │   ├── deductible_cost_share_co_pay.py
+│   │   │   └── cost_share_co_pay_handler.py
+│   │   └── impl/                        # Service implementations
+│   │       ├── cost_estimation_service_impl.py
+│   │       ├── calculation_service_impl.py
+│   │       ├── benefit_service_impl.py
+│   │       ├── accumulator_service_impl.py
+│   │       └── benefit_accumulator_matcher_service_impl.py
+│   └── main.py                          # FastAPI application entry point
+├── tests/
+│   ├── api/                             # API integration tests
+│   ├── features/                        # BDD tests (Behave)
+│   │   ├── handlers/                    # Feature files
+│   │   └── steps/                       # Step definitions
+│   ├── mock-data/                       # Test data
+│   │   └── mock-api-test-data/
+│   │       ├── csv-files/               # Scenario definitions
+│   │       └── responses/               # Expected responses
+│   ├── services/                        # Service unit tests
+│   ├── repository/                      # Repository tests
+│   └── conftest.py                      # Pytest configuration
+├── pipeline/
+│   ├── values.dev.yaml                  # Dev environment config
+│   ├── values.test.yaml                 # Test environment config
+│   └── values.prod.yaml                 # Prod environment config
+├── Dockerfile                            # Docker image definition
+├── Pipfile                               # Python dependencies
+├── pytest.ini                            # Pytest configuration
+├── behave.ini                            # Behave configuration
+├── jenkinsfile.yaml                      # CI/CD pipeline
+├── README.md                             # Project documentation
+└── .gitignore                            # Git ignore rules</code></pre></p>
+<p>---</p>
+<p><h2>Glossary</h2></p>
+<p><strong>Accumulator:</strong> A running total of healthcare expenses or services used during a benefit period.</p>
+<p><strong>Benefit:</strong> The specific coverage provided by an insurance plan for a healthcare service.</p>
+<p><strong>Coinsurance:</strong> The percentage of costs that a member pays after the deductible is met (e.g., 20%).</p>
+<p><strong>Copay:</strong> A fixed amount that a member pays for a covered service (e.g., $25).</p>
+<p><strong>Deductible:</strong> The amount a member must pay out-of-pocket before insurance coverage begins.</p>
+<p><strong>OOP Max (Out-of-Pocket Maximum):</strong> The maximum amount a member pays during a benefit period before the plan pays 100%.</p>
+<p><strong>Negotiated Rate:</strong> The agreed-upon price between the insurance company and healthcare provider.</p>
+<p><strong>Network:</strong> The group of healthcare providers contracted with an insurance plan (In-Network or Out-of-Network).</p>
+<p><strong>Service Amount:</strong> The billed charge for a healthcare service.</p>
+<p><strong>Member Pays:</strong> The calculated amount the member is responsible for paying.</p>
+<p><strong>Insurance Pays:</strong> The amount the insurance company will cover.</p>
+<p>---</p>
+<p><h2>Document Information</h2></p>
+<p><strong>Version:</strong> 1.0  
+<strong>Last Updated:</strong> October 1, 2025  
+<strong>Author:</strong> Technical Documentation Team  
+<strong>Status:</strong> Final</p>
+<p>---</p>
+<p><strong>End of Document</strong>
+</p>
+    </div>
+    
+    <footer style="margin-top: 60px; padding-top: 20px; border-top: 2px solid #ddd; text-align: center; color: #777;">
+        <p>© 2025 Cost Estimator Calc Service | Technical Documentation</p>
+        <p style="font-size: 0.9em;">Generated on October 1, 2025</p>
+    </footer>
+</body>
+</html>
