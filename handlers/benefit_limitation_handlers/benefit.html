@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Benefit Limitation Handler Deep Dive</title>
+    <style>
+        @page {
+            margin: 0.75in;
+        }
+        @media print {
+            body { font-size: 10pt; }
+            h1 { page-break-before: always; margin-top: 0; }
+            h1:first-of-type { page-break-before: auto; }
+            h2 { page-break-before: always; margin-top: 0; }
+            h2:first-of-type { page-break-before: auto; }
+            pre, table { page-break-inside: avoid; }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            line-height: 1.7;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #2c3e50;
+        }
+        .cover {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: -40px -20px 60px -20px;
+            padding: 100px 20px;
+            page-break-after: always;
+        }
+        .cover h1 {
+            font-size: 3.5em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .cover .subtitle {
+            font-size: 1.8em;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #667eea;
+            padding-bottom: 15px;
+            margin-top: 60px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 12px;
+            margin-top: 50px;
+            font-size: 2em;
+        }
+        h3 {
+            color: #667eea;
+            margin-top: 35px;
+            font-size: 1.5em;
+        }
+        h4 {
+            color: #764ba2;
+            margin-top: 25px;
+            font-size: 1.2em;
+        }
+        code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: Monaco, 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        pre code {
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 25px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 14px;
+            text-align: left;
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        li {
+            margin: 10px 0;
+        }
+        .footer {
+            margin-top: 80px;
+            padding-top: 30px;
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+        }
+        .highlight-box {
+            background: #f0f0ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <h1>Benefit Limitation Handler</h1>
+        <div class="subtitle">Complete Deep Dive</div>
+        <div class="subtitle">benefit_limitation_handler.py Explained</div>
+        <div class="version">
+            <p>Handler #2 in Calculation Chain</p>
+            <p>Technical Documentation v1.0</p>
+            <p>October 2025</p>
+        </div>
+    </div>
+    <div class="content">
+        <p><h1>Benefit Limitation Handler - Complete Deep Dive</h1></p>
+<p><h2>Comprehensive Explanation of <code>benefit_limitation_handler.py</code></h2></p>
+<p>---</p>
+<p><h2>Table of Contents</h2></p>
+<p><li>[Executive Summary](#executive-summary)</li>
+<li>[What is Benefit Limitation?](#what-is-benefit-limitation)</li>
+<li>[Handler Overview](#handler-overview)</li>
+<li>[Complete Code Structure](#complete-code-structure)</li>
+<li>[Main Method: process()](#main-method-process)</li>
+<li>[Helper Methods Explained](#helper-methods-explained)</li>
+<li>[Limit Types: Dollar vs Counter](#limit-types-dollar-vs-counter)</li>
+<li>[Decision Tree and Logic Flow](#decision-tree-and-logic-flow)</li>
+<li>[Real-World Examples](#real-world-examples)</li>
+<li>[Integration with Handler Chain](#integration-with-handler-chain)</li>
+<li>[Complete Code Walkthrough](#complete-code-walkthrough)</li>
+<li>[Edge Cases and Error Handling](#edge-cases-and-error-handling)</li></p>
+<p>---</p>
+<p><h2>1. Executive Summary</h2></p>
+<p><h3>What Does This Handler Do?</h3></p>
+<p>The <strong>Benefit Limitation Handler</strong> checks if a member has reached their benefit limits and calculates costs accordingly.</p>
+<p><strong>Examples of Benefit Limits:</strong>
+<li>Physical therapy: Limited to 20 visits per year</li>
+<li>Chiropractic care: Limited to $500 per year</li>
+<li>Durable Medical Equipment: Limited to $1000 per year</li></p>
+<p><h3>Position in Handler Chain</h3></p>
+<p><pre><code class="language-">ServiceCoverageHandler
+    ↓
+BenefitLimitationHandler ← YOU ARE HERE (Handler #2)
+    ↓
+OOPMaxHandler
+    ↓
+DeductibleHandler
+    ↓
+CostShareCoPayHandler</code></pre></p>
+<p><h3>Key Responsibilities</h3></p>
+<p><li><strong>Check</strong> if benefit has a limit</li>
+<li><strong>Determine</strong> limit type (Dollar amount or Counter/visits)</li>
+<li><strong>Calculate</strong> remaining limit</li>
+<li><strong>Decide</strong> member payment based on limit status:</li>
+   - Limit reached → Member pays full amount
+   - Partial limit remaining → Member pays excess
+   - Within limit → Continue to next handler</p>
+<p><h3>Handler Characteristics</h3></p>
+<p><li><strong>File</strong>: <code>benefit_limitation_handler.py</code></li>
+<li><strong>Lines of Code</strong>: 104</li>
+<li><strong>Inherits From</strong>: Handler (base class)</li>
+<li><strong>Position</strong>: 2nd in the calculation chain</li>
+<li><strong>Main Method</strong>: <code>process(context)</code></li>
+<li><strong>Helper Methods</strong>: 3 (<code>_apply_limitation</code>, <code>_apply_partial_limit</code>, <code>_apply_within_limit</code>)</li></p>
+<p>---</p>
+<p><h2>2. What is Benefit Limitation?</h2></p>
+<p><h3>Definition</h3></p>
+<p>A <strong>benefit limitation</strong> restricts how much insurance will cover for a specific service within a time period (usually per year).</p>
+<p><h3>Types of Limitations</h3></p>
+<p><strong>1. Visit Limits (Counter)</strong>
+<pre><code class="language-">Physical Therapy: 20 visits per year
+Current usage: 18 visits
+Remaining: 2 visits</p>
+<p>Today's visit: Visit #19 ✓ (covered)</code></pre></p>
+<p><strong>2. Dollar Limits (Dollar)</strong>
+<pre><code class="language-">Chiropractic Care: $500 per year
+Current usage: $450
+Remaining: $50</p>
+<p>Today's service: $100
+Coverage: Only $50 (member pays $50)</code></pre></p>
+<p><h3>Why Limitations Exist</h3></p>
+<p><strong>Cost Control:</strong>
+<li>Prevent overutilization</li>
+<li>Encourage appropriate use</li>
+<li>Manage insurance costs</li></p>
+<p><strong>Clinical Guidelines:</strong>
+<li>Based on medical necessity</li>
+<li>Evidence-based limits</li>
+<li>Encourage alternative treatments</li></p>
+<p><h3>Examples</h3></p>
+<p><strong>Example 1: Physical Therapy</strong>
+<pre><code class="language-">Benefit: Physical therapy sessions
+Limit Type: Counter
+Limit Value: 20 visits per year
+Used: 15 visits
+Remaining: 5 visits</p>
+<p>Scenario A: Request visit #16
+  Result: Covered ✓</p>
+<p>Scenario B: Request visit #21
+  Result: NOT covered (limit reached)</code></pre></p>
+<p><strong>Example 2: Durable Medical Equipment</strong>
+<pre><code class="language-">Benefit: DME (wheelchairs, walkers, etc.)
+Limit Type: Dollar
+Limit Value: $1000 per year
+Used: $800
+Remaining: $200</p>
+<p>Scenario A: Request $150 wheelchair
+  Result: Fully covered ✓</p>
+<p>Scenario B: Request $300 wheelchair
+  Result: $200 covered, member pays $100</code></pre></p>
+<p>---</p>
+<p><h2>3. Handler Overview</h2></p>
+<p><h3>Class Definition</h3></p>
+<p><pre><code class="language-python">class BenefitLimitationHandler(Handler):
+    """Handle the benefits limitation"""</code></pre></p>
+<p><strong>Inherits From:</strong> <code>Handler</code> (base class)</p>
+<p><strong>Base Class Provides:</strong>
+<li><code>handle()</code> method (orchestrates processing)</li>
+<li><code>set_next()</code> method (links to next handler)</li>
+<li>Chain of responsibility pattern</li></p>
+<p><h3>Handler Structure</h3></p>
+<p><pre><code class="language-python">class BenefitLimitationHandler(Handler):
+    # Branch setup methods
+    def set_deductible_cost_share_co_handler(handler)
+    def set_oopmax_handler(handler)
+    
+    # Main processing method
+    def process(context) -> InsuranceContext
+    
+    # Helper methods
+    def _apply_limitation(context)
+    def _apply_partial_limit(context)
+    def _apply_within_limit(context)</code></pre></p>
+<p><h3>Handler Responsibilities</h3></p>
+<p><pre><code class="language-">┌────────────────────────────────────────────────┐
+│ BenefitLimitationHandler                       │
+├────────────────────────────────────────────────┤
+│ 1. Check if limit exists                       │
+│ 2. Check if limit reached (0 remaining)        │
+│ 3. Determine limit type (Dollar vs Counter)    │
+│ 4. Apply appropriate logic:                    │
+│    - Limit reached: Member pays all            │
+│    - Partial: Member pays excess               │
+│    - Within: Continue to next handler          │
+│ 5. Update context                              │
+│ 6. Set calculation_complete flag               │
+└────────────────────────────────────────────────┘</code></pre></p>
+<p>---</p>
+<p><h2>4. Complete Code Structure</h2></p>
+<p><h3>Imports and Class Definition (Lines 1-4)</h3></p>
+<p><pre><code class="language-python">from app.core.base import Handler, InsuranceContext</p>
+<p>class BenefitLimitationHandler(Handler):
+    """Handle the benefits limitation"""</code></pre></p>
+<p><h3>Branch Setup Methods (Lines 8-14)</h3></p>
+<p><pre><code class="language-python">def set_deductible_cost_share_co_handler(self, handler):
+    self._deductible_cost_share_co_handler = handler
+    return handler</p>
+<p>def set_oopmax_handler(self, handler):
+    self._oopmax_handler = handler
+    return handler</code></pre></p>
+<p><strong>Purpose:</strong> Set up alternate handler paths for branching</p>
+<p><h3>Main Processing Method (Lines 16-66)</h3></p>
+<p><pre><code class="language-python">def process(self, context: InsuranceContext) -> InsuranceContext:
+    # Main logic for checking and applying limits</code></pre></p>
+<p><h3>Helper Methods (Lines 68-103)</h3></p>
+<p><pre><code class="language-python">def _apply_limitation(context)        # Counter: Decrement by 1
+def _apply_partial_limit(context)     # Dollar: Partial coverage
+def _apply_within_limit(context)      # Dollar: Full coverage</code></pre></p>
+<p>---</p>
+<p><h2>5. Main Method: process()</h2></p>
+<p><h3>Method Signature (Line 16)</h3></p>
+<p><pre><code class="language-python">def process(self, context: InsuranceContext) -> InsuranceContext:</code></pre></p>
+<p><strong>Input:</strong> InsuranceContext with:
+<li><code>accum_code</code>: Set of accumulator codes</li>
+<li><code>limit_calculated</code>: Remaining limit value</li>
+<li><code>limit_type</code>: "dollar" or "counter"</li>
+<li><code>service_amount</code>: Cost of service</li></p>
+<p><strong>Output:</strong> Modified InsuranceContext with:
+<li><code>member_pays</code>: Updated if limit applies</li>
+<li><code>calculation_complete</code>: Set to True if limit reached</li>
+<li><code>limit_calculated</code>: Updated remaining limit</li></p>
+<p><h3>Processing Flow</h3></p>
+<p><pre><code class="language-">1. Check if limit exists
+   NO → Return context (continue to next handler)
+   YES → Continue</p>
+<p><li>Check if limit reached (0 remaining)</li>
+   YES → Member pays all, STOP
+   NO → Continue</p>
+<p><li>Check limit type</li>
+   ├─ Dollar:
+   │   ├─ Service > Remaining? → Partial limit
+   │   └─ Service ≤ Remaining? → Within limit
+   │
+   ├─ Counter:
+   │   └─ Decrement counter by 1
+   │
+   └─ Unknown → Throw exception</code></pre></p>
+<p><h3>Step-by-Step Breakdown</h3></p>
+<p><h4><strong>Step 1: Check if Limit Exists (Lines 17-19)</strong></h4></p>
+<p><pre><code class="language-python">if "limit" not in context.accum_code:
+    context.trace_decision("Process", "Context has no benefit limitation", True)
+    return context</code></pre></p>
+<p><strong>What This Does:</strong>
+<li>Checks if "limit" is in the set of accumulator codes</li>
+<li>If NO limit → Return immediately (continue to next handler)</li>
+<li>If YES limit → Continue processing</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>No limit</h1>
+context.accum_code = {"deductible", "oopmax"}
+Result: Return immediately ✓</p>
+<p><h1>Has limit</h1>
+context.accum_code = {"limit", "deductible"}
+Result: Continue processing ✓</code></pre></p>
+<p><h4><strong>Step 2: Check if Limit Reached (Lines 22-36)</strong></h4></p>
+<p><pre><code class="language-python">if (
+    context.accum_code
+    and "limit" in [code.lower() for code in context.accum_code]
+    and (context.limit_calculated is None or context.limit_calculated == 0)
+):
+    context.trace_decision(
+        "Process",
+        "The benefit code is 'limit' and the calculated limit is 0, applying benefit service is not covered as benefit limit has reached",
+        True,
+    )
+    context.member_pays = context.member_pays + context.service_amount
+    context.service_amount = 0
+    context.calculation_complete = True
+    return context</code></pre></p>
+<p><strong>Conditions:</strong>
+<li><code>context.accum_code</code> exists</li>
+<li>"limit" is in accumulator codes (case-insensitive)</li>
+<li><code>limit_calculated</code> is None OR 0</li></p>
+<p><strong>If All True:</strong>
+<li>Member pays the full service amount</li>
+<li>Service amount set to 0</li>
+<li>Calculation marked complete</li>
+<li>Return (STOP processing)</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Limit reached</h1>
+context.limit_calculated = 0
+context.service_amount = 100.00</p>
+<p>Processing:
+  member_pays += 100.00
+  service_amount = 0
+  calculation_complete = True
+  STOP</p>
+<p>Result: Member pays $100 (no coverage)</code></pre></p>
+<p><h4><strong>Step 3: Handle Dollar Limit (Lines 38-45)</strong></h4></p>
+<p><pre><code class="language-python">if context.limit_type and context.limit_type.lower() == "dollar":
+    if context.limit_calculated is not None and context.limit_calculated > 0:
+        self._oopmax_handler.handle(context)
+        if context.service_amount > context.limit_calculated:
+            return self._apply_partial_limit(context)
+        else:
+            return self._apply_within_limit(context)</code></pre></p>
+<p><strong>Logic for Dollar Limit:</strong></p>
+<p><li>Check limit type is "dollar"</li>
+<li>Check remaining limit > 0</li>
+<li>Process through OOPMax handler first</li>
+<li>Compare service amount to remaining limit:</li>
+   - <strong>Service > Remaining</strong> → Apply partial limit
+   - <strong>Service ≤ Remaining</strong> → Apply within limit</p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Partial coverage</h1>
+limit_calculated = 50.00
+service_amount = 100.00</p>
+<p>100 > 50? YES → _apply_partial_limit()
+  member_pays += (100 - 50) = 50
+  limit_calculated = 0
+  STOP</p>
+<p>Result: Member pays $50, insurance pays $50</code></pre></p>
+<p><h4><strong>Step 4: Handle Counter Limit (Lines 47-61)</strong></h4></p>
+<p><pre><code class="language-python">elif context.limit_type and context.limit_type.lower() == "counter":
+    if context.limit_calculated is not None and context.limit_calculated > 0:
+        self._oopmax_handler.handle(context)
+        return self._apply_limitation(context)
+    else:
+        context.trace_decision(
+            "Process",
+            "The benefit code is 'limit' and the calculated limit is 0, applying benefit service is not covered as benefit limit has reached",
+            True,
+        )
+        context.member_pays = context.member_pays + context.service_amount
+        context.service_amount = 0
+        context.calculation_complete = True
+        return context</code></pre></p>
+<p><strong>Logic for Counter Limit:</strong></p>
+<p><li>Check limit type is "counter"</li>
+<li>If remaining > 0:</li>
+   - Process through OOPMax handler
+   - Apply limitation (decrement counter)
+<li>If remaining = 0:</li>
+   - Member pays all
+   - STOP</p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Visit covered</h1>
+limit_calculated = 5  # 5 visits remaining
+limit_type = "counter"</p>
+<p>Processing:
+  _apply_limitation()
+  limit_calculated -= 1  # Now 4 remaining
+  calculation_complete = True
+  STOP</p>
+<p>Result: Visit covered ✓</code></pre></p>
+<p><h4><strong>Step 5: Handle Unknown Limit Type (Lines 63-66)</strong></h4></p>
+<p><pre><code class="language-python">raise Exception(
+    f"Uknown benefit limit type. Unable to proceed. Limit type passed: {context.limit_type}"
+)</code></pre></p>
+<p><strong>If limit type is neither "dollar" nor "counter":</strong>
+<li>Throw exception</li>
+<li>Stops entire calculation</li></p>
+<p>---</p>
+<p><h2>6. Helper Methods Explained</h2></p>
+<p><h3>Method 1: _apply_limitation() (Lines 68-77)</h3></p>
+<p><pre><code class="language-python">def _apply_limitation(self, context: InsuranceContext) -> InsuranceContext:
+    """Apply logic when benefit limit has been reached"""
+    
+    if context.limit_calculated is not None:
+        context.limit_calculated = context.limit_calculated - 1
+    context.calculation_complete = True
+    
+    context.trace("_apply_limitation", "Logic applied")
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Used for <strong>counter limits</strong> (visits)</p>
+<p><strong>What It Does:</strong>
+<li>Decrement limit by 1 (one visit used)</li>
+<li>Mark calculation as complete</li>
+<li>Add trace entry</li>
+<li>Return context</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+limit_calculated = 5  # 5 visits remaining</p>
+<p><h1>After _apply_limitation()</h1>
+limit_calculated = 4  # 4 visits remaining
+calculation_complete = True</code></pre></p>
+<p><strong>When Used:</strong>
+<li>Limit type is "counter"</li>
+<li>Remaining limit > 0</li>
+<li>Member is using one of their available visits</li></p>
+<p>---</p>
+<p><h3>Method 2: _apply_partial_limit() (Lines 79-91)</h3></p>
+<p><pre><code class="language-python">def _apply_partial_limit(self, context: InsuranceContext) -> InsuranceContext:
+    """Apply logic when service exceeds the remaining benefit limit"""
+    
+    if context.limit_calculated is not None:
+        context.member_pays += context.service_amount - context.limit_calculated
+        context.limit_calculated = 0.0
+    context.calculation_complete = True
+    
+    context.trace("_apply_partial_limit", "Logic applied")
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Used for <strong>dollar limits</strong> when service exceeds remaining coverage</p>
+<p><strong>What It Does:</strong>
+<li>Calculate excess amount: <code>service_amount - limit_calculated</code></li>
+<li>Add excess to <code>member_pays</code></li>
+<li>Set limit to 0 (exhausted)</li>
+<li>Mark calculation complete</li>
+<li>Return context</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+service_amount = 100.00
+limit_calculated = 50.00
+member_pays = 0.00</p>
+<p><h1>Calculation</h1>
+excess = 100.00 - 50.00 = 50.00
+member_pays += 50.00</p>
+<p><h1>After _apply_partial_limit()</h1>
+member_pays = 50.00       # Member pays excess
+limit_calculated = 0.00   # Limit exhausted
+calculation_complete = True</code></pre></p>
+<p><strong>When Used:</strong>
+<li>Limit type is "dollar"</li>
+<li>Service cost > Remaining limit</li>
+<li>Insurance covers partial amount</li></p>
+<p><strong>Visual:</strong>
+<pre><code class="language-">Service Cost: $100
+  ├─ Insurance pays: $50 (remaining limit)
+  └─ Member pays: $50 (excess)</p>
+<p>Limit: $50 → $0 (exhausted)</code></pre></p>
+<p>---</p>
+<p><h3>Method 3: _apply_within_limit() (Lines 93-103)</h3></p>
+<p><pre><code class="language-python">def _apply_within_limit(self, context: InsuranceContext) -> InsuranceContext:
+    """Service is within the benefit limits"""
+    
+    if context.limit_calculated is not None:
+        context.limit_calculated -= context.service_amount
+    context.calculation_complete = True
+    
+    context.trace("_apply_within_limit", "Logic applied")
+    
+    return context</code></pre></p>
+<p><strong>Purpose:</strong> Used for <strong>dollar limits</strong> when service is within remaining coverage</p>
+<p><strong>What It Does:</strong>
+<li>Subtract service amount from remaining limit</li>
+<li>Mark calculation complete</li>
+<li>Add trace entry</li>
+<li>Return context</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>Before</h1>
+service_amount = 50.00
+limit_calculated = 200.00</p>
+<p><h1>After _apply_within_limit()</h1>
+limit_calculated = 150.00  # 200 - 50
+calculation_complete = True</code></pre></p>
+<p><strong>When Used:</strong>
+<li>Limit type is "dollar"</li>
+<li>Service cost ≤ Remaining limit</li>
+<li>Fully covered by insurance</li></p>
+<p><strong>Visual:</strong>
+<pre><code class="language-">Service Cost: $50
+Remaining Limit: $200</p>
+<p>Insurance pays: $50 ✓
+New Remaining: $150</p>
+<p>Member pays: $0</code></pre></p>
+<p>---</p>
+<p><h2>7. Limit Types: Dollar vs Counter</h2></p>
+<p><h3>Dollar Limit</h3></p>
+<p><strong>Definition:</strong> Maximum dollar amount insurance will pay per year</p>
+<p><strong>Format:</strong>
+<pre><code class="language-python">limit_type = "dollar"
+limit_calculated = 500.00  # $500 remaining</code></pre></p>
+<p><strong>Processing Logic:</strong>
+<pre><code class="language-python">if service_amount > limit_calculated:
+    # Partial coverage
+    member_pays = service_amount - limit_calculated
+    insurance_pays = limit_calculated
+else:
+    # Full coverage
+    member_pays = 0
+    insurance_pays = service_amount</code></pre></p>
+<p><strong>Examples:</strong></p>
+<p><strong>Example 1: Within Limit</strong>
+<pre><code class="language-">Limit: $500 remaining
+Service: $100
+Result: Fully covered
+  Insurance pays: $100
+  Member pays: $0
+  New limit: $400</code></pre></p>
+<p><strong>Example 2: Exceeds Limit</strong>
+<pre><code class="language-">Limit: $50 remaining
+Service: $100
+Result: Partial coverage
+  Insurance pays: $50
+  Member pays: $50
+  New limit: $0</code></pre></p>
+<p><strong>Example 3: Limit Exhausted</strong>
+<pre><code class="language-">Limit: $0 remaining
+Service: $100
+Result: Not covered
+  Insurance pays: $0
+  Member pays: $100
+  New limit: $0</code></pre></p>
+<p>---</p>
+<p><h3>Counter Limit</h3></p>
+<p><strong>Definition:</strong> Maximum number of services/visits per year</p>
+<p><strong>Format:</strong>
+<pre><code class="language-python">limit_type = "counter"
+limit_calculated = 5  # 5 visits remaining</code></pre></p>
+<p><strong>Processing Logic:</strong>
+<pre><code class="language-python">if limit_calculated > 0:
+    # Visit covered
+    limit_calculated -= 1
+else:
+    # Limit reached
+    member_pays = service_amount</code></pre></p>
+<p><strong>Examples:</strong></p>
+<p><strong>Example 1: Visits Remaining</strong>
+<pre><code class="language-">Limit: 5 visits remaining
+Today: Visit #16
+Result: Covered
+  New limit: 4 visits</code></pre></p>
+<p><strong>Example 2: Last Visit</strong>
+<pre><code class="language-">Limit: 1 visit remaining
+Today: Visit #20
+Result: Covered
+  New limit: 0 visits</code></pre></p>
+<p><strong>Example 3: Limit Exhausted</strong>
+<pre><code class="language-">Limit: 0 visits remaining
+Today: Visit #21
+Result: Not covered
+  Member pays: Full amount</code></pre></p>
+<p><h3>Comparison Table</h3></p>
+<p>| Aspect | Dollar Limit | Counter Limit |
+|--------|-------------|---------------|
+| <strong>Type</strong> | Monetary | Quantity |
+| <strong>Unit</strong> | Dollars ($) | Visits/Services |
+| <strong>Exhaustion</strong> | Gradual (partial) | All-or-nothing |
+| <strong>Example</strong> | $500/year DME | 20 PT visits/year |
+| <strong>Calculation</strong> | Subtract amount | Decrement by 1 |
+| <strong>Partial Coverage</strong> | Yes | No |
+| <strong>Member Pays</strong> | Excess amount | Full if exhausted |</p>
+<p>---</p>
+<p><h2>8. Decision Tree and Logic Flow</h2></p>
+<p><h3>Complete Decision Tree</h3></p>
+<p><pre><code class="language-">┌─────────────────────────────────────────────────┐
+│ START: BenefitLimitationHandler                 │
+└──────────────────┬──────────────────────────────┘
+                   ↓
+        ┌──────────────────────┐
+        │ Has "limit" in       │
+        │ accum_code?          │
+        └──────┬───────────────┘
+               │
+        ┌──────┴──────┐
+        │             │
+       NO            YES
+        │             │
+        ↓             ↓
+   [Return]    ┌──────────────────┐
+   Continue    │ limit_calculated │
+   to next     │ = 0 or None?     │
+               └──────┬───────────┘
+                      │
+               ┌──────┴──────┐
+               │             │
+              YES           NO
+               │             │
+               ↓             ↓
+        ┌─────────────┐  ┌─────────────┐
+        │ Member pays │  │ What type?  │
+        │ FULL amount │  └──────┬──────┘
+        │ STOP        │         │
+        └─────────────┘    ┌────┴─────┐
+                           │          │
+                        Dollar    Counter
+                           │          │
+                           ↓          ↓
+              ┌──────────────────┐  ┌──────────────┐
+              │ Process OOPMax   │  │ Process      │
+              │ Handler first    │  │ OOPMax first │
+              └────────┬─────────┘  └──────┬───────┘
+                       │                    │
+                       ↓                    ↓
+              ┌──────────────────┐  ┌──────────────┐
+              │ Service >        │  │ Remaining>0? │
+              │ Remaining?       │  └──────┬───────┘
+              └────────┬─────────┘         │
+                       │            ┌──────┴──────┐
+                ┌──────┴──────┐    │             │
+                │             │   YES           NO
+               YES           NO    │             │
+                │             │    ↓             ↓
+                ↓             ↓  ┌─────────┐  ┌─────────┐
+         ┌──────────┐  ┌──────────┐  │Decrement│  │Member   │
+         │Partial   │  │Within    │  │counter  │  │pays all │
+         │coverage  │  │limit     │  │STOP     │  │STOP     │
+         │STOP      │  │STOP      │  └─────────┘  └─────────┘
+         └──────────┘  └──────────┘</code></pre></p>
+<p><h3>Flow Examples</h3></p>
+<p><strong>Example 1: No Limit</strong>
+<pre><code class="language-">Has limit? NO
+↓
+Return context
+Continue to next handler</code></pre></p>
+<p><strong>Example 2: Limit Reached (Dollar or Counter)</strong>
+<pre><code class="language-">Has limit? YES
+Limit = 0? YES
+↓
+member_pays += service_amount
+service_amount = 0
+calculation_complete = True
+STOP</code></pre></p>
+<p><strong>Example 3: Dollar Limit - Within</strong>
+<pre><code class="language-">Has limit? YES
+Limit = $200
+Type = Dollar
+Service = $50
+↓
+Process OOPMax Handler
+Service > Limit? NO
+↓
+_apply_within_limit()
+limit_calculated = 200 - 50 = 150
+calculation_complete = True
+STOP</code></pre></p>
+<p><strong>Example 4: Dollar Limit - Exceeds</strong>
+<pre><code class="language-">Has limit? YES
+Limit = $50
+Type = Dollar
+Service = $100
+↓
+Process OOPMax Handler
+Service > Limit? YES
+↓
+_apply_partial_limit()
+member_pays += (100 - 50) = 50
+limit_calculated = 0
+calculation_complete = True
+STOP</code></pre></p>
+<p><strong>Example 5: Counter Limit - Visit Available</strong>
+<pre><code class="language-">Has limit? YES
+Limit = 5 visits
+Type = Counter
+↓
+Process OOPMax Handler
+Remaining > 0? YES
+↓
+_apply_limitation()
+limit_calculated = 5 - 1 = 4
+calculation_complete = True
+STOP</code></pre></p>
+<p>---</p>
+<p><h2>9. Real-World Examples</h2></p>
+<p><h3>Example 1: Physical Therapy - Counter Limit</h3></p>
+<p><strong>Scenario:</strong> Member needs physical therapy</p>
+<p><strong>Benefit Details:</strong>
+<pre><code class="language-">Service: Physical Therapy
+Limit Type: Counter
+Annual Limit: 20 visits
+Used: 18 visits
+Remaining: 2 visits
+Today: Visit #19</code></pre></p>
+<p><strong>Processing:</strong></p>
+<p><pre><code class="language-python"><h1>Context coming in</h1>
+context.accum_code = {"limit", "oopmax"}
+context.limit_type = "counter"
+context.limit_calculated = 2  # 2 visits remaining
+context.service_amount = 150.00</p>
+<p><h1>Step 1: Has limit?</h1>
+"limit" in accum_code? YES → Continue</p>
+<p><h1>Step 2: Limit reached?</h1>
+limit_calculated == 0? NO (it's 2) → Continue</p>
+<p><h1>Step 3: Type?</h1>
+limit_type == "counter"? YES</p>
+<p><h1>Step 4: Remaining > 0?</h1>
+2 > 0? YES</p>
+<p><h1>Step 5: Apply limitation</h1>
+_apply_limitation():
+  limit_calculated = 2 - 1 = 1
+  calculation_complete = True</p>
+<p><h1>Result</h1>
+Visit #19 is COVERED ✓
+1 visit remaining</code></pre></p>
+<p><strong>Output:</strong>
+<pre><code class="language-">Member pays: Determined by other handlers (copay, etc.)
+Visits remaining: 1
+Status: Covered</code></pre></p>
+<p>---</p>
+<p><h3>Example 2: Chiropractic Care - Dollar Limit (Within)</h3></p>
+<p><strong>Scenario:</strong> Member gets chiropractic adjustment</p>
+<p><strong>Benefit Details:</strong>
+<pre><code class="language-">Service: Chiropractic Care
+Limit Type: Dollar
+Annual Limit: $500
+Used: $350
+Remaining: $150
+Today's Service: $75</code></pre></p>
+<p><strong>Processing:</strong></p>
+<p><pre><code class="language-python"><h1>Context</h1>
+context.limit_type = "dollar"
+context.limit_calculated = 150.00
+context.service_amount = 75.00</p>
+<p><h1>Step 1-2: Has limit and not exhausted</h1>
+YES → Continue</p>
+<p><h1>Step 3: Type is dollar</h1>
+_oopmax_handler.handle(context)  # Process OOP first</p>
+<p><h1>Step 4: Compare</h1>
+75.00 > 150.00? NO</p>
+<p><h1>Step 5: Within limit</h1>
+_apply_within_limit():
+  limit_calculated = 150 - 75 = 75.00
+  calculation_complete = True</p>
+<p><h1>Result</h1>
+Service FULLY COVERED ✓</code></pre></p>
+<p><strong>Output:</strong>
+<pre><code class="language-">Insurance pays: $75
+Member pays: $0 (plus any copay from other handlers)
+Remaining limit: $75</code></pre></p>
+<p>---</p>
+<p><h3>Example 3: DME - Dollar Limit (Exceeds)</h3></p>
+<p><strong>Scenario:</strong> Member needs wheelchair</p>
+<p><strong>Benefit Details:</strong>
+<pre><code class="language-">Service: Durable Medical Equipment
+Limit Type: Dollar
+Annual Limit: $1000
+Used: $950
+Remaining: $50
+Today's Equipment: $300 wheelchair</code></pre></p>
+<p><strong>Processing:</strong></p>
+<p><pre><code class="language-python"><h1>Context</h1>
+context.limit_type = "dollar"
+context.limit_calculated = 50.00
+context.service_amount = 300.00</p>
+<p><h1>Steps 1-3: Has limit, not exhausted, type dollar</h1>
+_oopmax_handler.handle(context)</p>
+<p><h1>Step 4: Compare</h1>
+300.00 > 50.00? YES</p>
+<p><h1>Step 5: Partial limit</h1>
+_apply_partial_limit():
+  excess = 300 - 50 = 250
+  member_pays += 250.00
+  limit_calculated = 0.00
+  calculation_complete = True</p>
+<p><h1>Result</h1>
+Service PARTIALLY COVERED</code></pre></p>
+<p><strong>Output:</strong>
+<pre><code class="language-">Insurance pays: $50 (remaining limit)
+Member pays: $250 (excess amount)
+Remaining limit: $0 (exhausted)</code></pre></p>
+<p>---</p>
+<p><h3>Example 4: Limit Exhausted</h3></p>
+<p><strong>Scenario:</strong> Member requests 21st PT visit</p>
+<p><strong>Benefit Details:</strong>
+<pre><code class="language-">Service: Physical Therapy
+Limit Type: Counter
+Annual Limit: 20 visits
+Used: 20 visits
+Remaining: 0 visits
+Today: Visit #21</code></pre></p>
+<p><strong>Processing:</strong></p>
+<p><pre><code class="language-python"><h1>Context</h1>
+context.accum_code = {"limit"}
+context.limit_calculated = 0
+context.service_amount = 150.00</p>
+<p><h1>Step 1: Has limit?</h1>
+YES → Continue</p>
+<p><h1>Step 2: Limit reached?</h1>
+limit_calculated == 0? YES</p>
+<p><h1>Member pays all</h1>
+member_pays += 150.00
+service_amount = 0
+calculation_complete = True
+STOP</p>
+<p><h1>Result</h1>
+Visit NOT COVERED ✗</code></pre></p>
+<p><strong>Output:</strong>
+<pre><code class="language-">Insurance pays: $0
+Member pays: $150 (full amount)
+Remaining limit: 0
+Message: "Annual visit limit reached"</code></pre></p>
+<p>---</p>
+<p><h2>10. Integration with Handler Chain</h2></p>
+<p><h3>Position in Chain</h3></p>
+<p><pre><code class="language-">1. ServiceCoverageHandler
+   (Is service covered at all?)
+   ↓
+<li>BenefitLimitationHandler ← YOU ARE HERE</li>
+   (Has member reached benefit limits?)
+   ↓
+<li>OOPMaxHandler</li>
+   (Has member reached out-of-pocket maximum?)
+   ↓
+<li>DeductibleHandler</li>
+   (Apply deductible?)
+   ↓
+<li>CostShareCoPayHandler</li>
+   (Apply copay or coinsurance?)</code></pre></p>
+<p><h3>Why This Order?</h3></p>
+<p><strong>Benefit Limitation comes EARLY because:</strong>
+<li>If limit reached → No point checking other rules</li>
+<li>Prevents incorrect calculations</li>
+<li>Clear to member: "Limit reached"</li></p>
+<p><strong>Example Flow:</strong>
+<pre><code class="language-">Service Amount: $100
+Benefit Limit: $0 (exhausted)</p>
+<p>BenefitLimitationHandler:
+  member_pays = $100
+  calculation_complete = True
+  STOP</p>
+<p>Handlers NOT called:
+  ❌ OOPMaxHandler (skipped)
+  ❌ DeductibleHandler (skipped)
+  ❌ CopayHandler (skipped)</p>
+<p>Result: Member pays $100 (simple, clear)</code></pre></p>
+<p><h3>Branching</h3></p>
+<p><strong>BenefitLimitationHandler can branch to:</strong></p>
+<p><li><strong>OOPMaxHandler</strong> (most common)</li>
+   <pre><code class="language-python">   self._oopmax_handler.handle(context)
+   ```</p>
+<p><li><strong>DeductibleCostShareCoPayHandler</strong> (alternative path)</li>
+   ```python
+   self._deductible_cost_share_co_handler
+   ```</p>
+<p><strong>When Does Branching Happen?</strong></p>
+<p>Currently, the handler calls OOPMaxHandler directly:</code></pre>python
+<h1>Line 41 & 50</h1>
+self._oopmax_handler.handle(context)
+<pre><code class="language-">
+This ensures OOP Max is checked before applying limitation.</p>
+<p>---</p>
+<p><h2>11. Complete Code Walkthrough</h2></p>
+<p><h3>Line-by-Line Explanation</h3>
+</code></pre>python
+<h1>LINES 1-2: Imports</h1>
+from app.core.base import Handler, InsuranceContext</p>
+<p><h1>LINE 4: Class definition</h1>
+class BenefitLimitationHandler(Handler):
+    """Handle the benefits limitation"""</p>
+<p><h1>LINES 8-10: Set up branch handler (alternative path)</h1>
+def set_deductible_cost_share_co_handler(self, handler):
+    self._deductible_cost_share_co_handler = handler
+    return handler
+<h1>Stores reference to DeductibleCostShareCoPayHandler</h1></p>
+<p><h1>LINES 12-14: Set up OOPMax handler (primary branch)</h1>
+def set_oopmax_handler(self, handler):
+    self._oopmax_handler = handler
+    return handler
+<h1>Stores reference to OOPMaxHandler</h1></p>
+<p><h1>LINE 16: Main processing method</h1>
+def process(self, context: InsuranceContext) -> InsuranceContext:</p>
+<p>    # LINES 17-19: Check if limit exists
+    if "limit" not in context.accum_code:
+        # No limit → Continue to next handler
+        context.trace_decision("Process", "Context has no benefit limitation", True)
+        return context
+    
+    # LINES 22-35: Check if limit reached (exhausted)
+    if (
+        context.accum_code
+        and "limit" in [code.lower() for code in context.accum_code]
+        and (context.limit_calculated is None or context.limit_calculated == 0)
+    ):
+        # Limit is 0 or None → Member pays all
+        context.trace_decision(
+            "Process",
+            "The benefit code is 'limit' and the calculated limit is 0, applying benefit service is not covered as benefit limit has reached",
+            True,
+        )
+        context.member_pays = context.member_pays + context.service_amount
+        context.service_amount = 0
+        context.calculation_complete = True
+        return context
+    
+    # LINES 38-45: Handle DOLLAR limit type
+    if context.limit_type and context.limit_type.lower() == "dollar":
+        if context.limit_calculated is not None and context.limit_calculated > 0:
+            # Process through OOPMax first
+            self._oopmax_handler.handle(context)
+            
+            # Check if service exceeds remaining limit
+            if context.service_amount > context.limit_calculated:
+                # Partial coverage
+                return self._apply_partial_limit(context)
+            else:
+                # Full coverage within limit
+                return self._apply_within_limit(context)
+    
+    # LINES 47-61: Handle COUNTER limit type
+    elif context.limit_type and context.limit_type.lower() == "counter":
+        if context.limit_calculated is not None and context.limit_calculated > 0:
+            # Visits remaining
+            self._oopmax_handler.handle(context)
+            return self._apply_limitation(context)
+        else:
+            # No visits remaining
+            context.trace_decision(
+                "Process",
+                "The benefit code is 'limit' and the calculated limit is 0, applying benefit service is not covered as benefit limit has reached",
+                True,
+            )
+            context.member_pays = context.member_pays + context.service_amount
+            context.service_amount = 0
+            context.calculation_complete = True
+            return context
+    
+    # LINES 63-66: Unknown limit type → Error
+    raise Exception(
+        f"Uknown benefit limit type. Unable to proceed. Limit type passed: {context.limit_type}"
+    )</p>
+<p><h1>LINES 68-77: Helper - Apply counter limitation</h1>
+def _apply_limitation(self, context: InsuranceContext) -> InsuranceContext:
+    """Apply logic when benefit limit has been reached"""
+    
+    if context.limit_calculated is not None:
+        # Decrement counter by 1 (one visit used)
+        context.limit_calculated = context.limit_calculated - 1
+    
+    # Mark as complete
+    context.calculation_complete = True
+    
+    # Add trace
+    context.trace("_apply_limitation", "Logic applied")
+    
+    return context</p>
+<p><h1>LINES 79-91: Helper - Apply partial dollar limit</h1>
+def _apply_partial_limit(self, context: InsuranceContext) -> InsuranceContext:
+    """Apply logic when service exceeds the remaining benefit limit"""
+    
+    if context.limit_calculated is not None:
+        # Member pays the excess amount
+        context.member_pays += context.service_amount - context.limit_calculated
+        # Limit exhausted
+        context.limit_calculated = 0.0
+    
+    context.calculation_complete = True
+    context.trace("_apply_partial_limit", "Logic applied")
+    
+    return context</p>
+<p><h1>LINES 93-103: Helper - Apply within dollar limit</h1>
+def _apply_within_limit(self, context: InsuranceContext) -> InsuranceContext:
+    """Service is within the benefit limits"""
+    
+    if context.limit_calculated is not None:
+        # Subtract service amount from remaining limit
+        context.limit_calculated -= context.service_amount
+    
+    context.calculation_complete = True
+    context.trace("_apply_within_limit", "Logic applied")
+    
+    return context
+<pre><code class="language-">
+---</p>
+<p><h2>12. Edge Cases and Error Handling</h2></p>
+<p><h3>Edge Case 1: No Limit Accumulator</h3>
+</code></pre>python
+context.accum_code = {"deductible", "oopmax"}
+<h1>No "limit" in set</h1></p>
+<p>Result: Return immediately
+Handler: Continue to next (no limit checking needed)
+<pre><code class="language-">
+<h3>Edge Case 2: Limit is None</h3>
+</code></pre>python
+context.accum_code = {"limit"}
+context.limit_calculated = None</p>
+<p>Result: Treated as exhausted (0)
+Member pays: Full amount
+<pre><code class="language-">
+<h3>Edge Case 3: Unknown Limit Type</h3>
+</code></pre>python
+context.limit_type = "percentage"  # Not "dollar" or "counter"</p>
+<p>Result: Exception thrown
+Error: "Unknown benefit limit type. Unable to proceed..."
+<pre><code class="language-">
+<strong>Why Exception?</strong>
+<li>System doesn't know how to handle unknown type</li>
+<li>Better to fail fast than calculate incorrectly</li>
+<li>Indicates configuration error</li></p>
+<p><h3>Edge Case 4: Negative Limit</h3>
+</code></pre>python
+context.limit_calculated = -5</p>
+<p>Result: Treated as 0 (exhausted)
+Member pays: Full amount
+<pre><code class="language-">
+<h3>Edge Case 5: Zero Service Amount</h3>
+</code></pre>python
+context.service_amount = 0.00
+context.limit_calculated = 100.00</p>
+<p>Result: No change to limit
+Handler continues processing
+```</p>
+<p>---</p>
+<p><h2>Summary</h2></p>
+<p><h3>What We Learned</h3></p>
+<p><li><strong>Purpose</strong>: BenefitLimitationHandler checks if member has reached benefit limits</li></p>
+<p><li><strong>Two Limit Types</strong>:</li>
+   - <strong>Dollar</strong>: Monetary limit ($500/year)
+   - <strong>Counter</strong>: Visit limit (20 visits/year)</p>
+<p><li><strong>Three Outcomes</strong>:</li>
+   - <strong>Limit Reached</strong>: Member pays all
+   - <strong>Partial Limit</strong>: Member pays excess
+   - <strong>Within Limit</strong>: Fully covered</p>
+<p><li><strong>Processing Steps</strong>:</li>
+   - Check if limit exists
+   - Check if limit exhausted
+   - Determine limit type
+   - Apply appropriate logic
+   - Update context</p>
+<p><li><strong>Helper Methods</strong>:</li>
+   - <code>_apply_limitation()</code>: Counter decrement
+   - <code>_apply_partial_limit()</code>: Partial dollar coverage
+   - <code>_apply_within_limit()</code>: Full dollar coverage</p>
+<p><li><strong>Position</strong>: 2nd handler in chain (after ServiceCoverage)</li></p>
+<p><li><strong>Integration</strong>: Calls OOPMaxHandler before applying limits</li></p>
+<p><h3>Key Takeaways</h3></p>
+<p>✓ <strong>Early Check</strong>: Runs early to catch exhausted limits
+✓ <strong>Two Types</strong>: Handles both dollar and counter limits
+✓ <strong>Clear Logic</strong>: Separate methods for each scenario
+✓ <strong>OOP Integration</strong>: Processes OOP max first
+✓ <strong>Stops Chain</strong>: Sets <code>calculation_complete = True</code>
+✓ <strong>Error Handling</strong>: Throws exception for unknown types
+✓ <strong>Tracing</strong>: Comprehensive debugging support</p>
+<p><h3>Real-World Impact</h3></p>
+<p><strong>Prevents:</strong>
+<li>Incorrect coverage calculations</li>
+<li>Members exceeding annual limits</li>
+<li>Confusion about benefit exhaustion</li></p>
+<p><strong>Provides:</strong>
+<li>Clear limit status</li>
+<li>Accurate member cost</li>
+<li>Proper limit tracking</li></p>
+<p>---</p>
+<p><strong>End of Benefit Limitation Handler Deep Dive</strong>
+</p>
+    </div>
+    <div class="footer">
+        <p><strong>Benefit Limitation Handler - Technical Documentation</strong></p>
+        <p>© 2025 | Complete Deep Dive of benefit_limitation_handler.py</p>
+    </div>
+</body>
+</html>
