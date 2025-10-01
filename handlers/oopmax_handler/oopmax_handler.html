@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OOPMax Handler Deep Dive</title>
+    <style>
+        @page {
+            margin: 0.75in;
+        }
+        @media print {
+            body { font-size: 10pt; }
+            h1 { page-break-before: always; margin-top: 0; }
+            h1:first-of-type { page-break-before: auto; }
+            h2 { page-break-before: always; margin-top: 0; }
+            h2:first-of-type { page-break-before: auto; }
+            pre, table { page-break-inside: avoid; }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            line-height: 1.7;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #2c3e50;
+        }
+        .cover {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+            margin: -40px -20px 60px -20px;
+            padding: 100px 20px;
+            page-break-after: always;
+        }
+        .cover h1 {
+            font-size: 3.5em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .cover .subtitle {
+            font-size: 1.8em;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #38f9d7;
+            padding-bottom: 15px;
+            margin-top: 60px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 12px;
+            margin-top: 50px;
+            font-size: 2em;
+        }
+        h3 {
+            color: #43e97b;
+            margin-top: 35px;
+            font-size: 1.5em;
+        }
+        h4 {
+            color: #16a085;
+            margin-top: 25px;
+            font-size: 1.2em;
+        }
+        code {
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: Monaco, 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        pre code {
+            background: transparent;
+            border: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 25px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 14px;
+            text-align: left;
+        }
+        th {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        li {
+            margin: 10px 0;
+        }
+        .footer {
+            margin-top: 80px;
+            padding-top: 30px;
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <h1>OOPMax Handler</h1>
+        <div class="subtitle">Complete Deep Dive</div>
+        <div class="subtitle">oopmax_handler.py Explained</div>
+        <div class="version">
+            <p>Handler #3 - Out-of-Pocket Maximum</p>
+            <p>Financial Protection Handler</p>
+            <p>Technical Documentation v1.0</p>
+            <p>October 2025</p>
+        </div>
+    </div>
+    <div class="content">
+        <p><h1>OOPMax Handler - Complete Deep Dive</h1></p>
+<p><h2>Comprehensive Explanation of <code>oopmax_handler.py</code></h2></p>
+<p>---</p>
+<p><h2>Table of Contents</h2></p>
+<p><li>[Executive Summary](#executive-summary)</li>
+<li>[What is Out-of-Pocket Maximum?](#what-is-out-of-pocket-maximum)</li>
+<li>[Handler Overview](#handler-overview)</li>
+<li>[Complete Code Structure](#complete-code-structure)</li>
+<li>[Main Method: process()](#main-method-process)</li>
+<li>[Branch Setup Methods](#branch-setup-methods)</li>
+<li>[OOPMax Logic Deep Dive](#oopmax-logic-deep-dive)</li>
+<li>[Real-World Examples](#real-world-examples)</li>
+<li>[Integration with Handler Chain](#integration-with-handler-chain)</li>
+<li>[Complete Code Walkthrough](#complete-code-walkthrough)</li>
+<li>[Decision Tree and Flow](#decision-tree-and-flow)</li>
+<li>[Impact and Importance](#impact-and-importance)</li></p>
+<p>---</p>
+<p><h2>1. Executive Summary</h2></p>
+<p><h3>What Does This Handler Do?</h3></p>
+<p>The <strong>OOPMax Handler</strong> (Out-of-Pocket Maximum Handler) is a <strong>ROUTING HANDLER</strong> that checks if a member has reached their annual out-of-pocket maximum and routes accordingly.</p>
+<p><strong>Core Question:</strong> "Has the member reached their out-of-pocket maximum?"</p>
+<p><h3>Position in Handler Chain</h3></p>
+<p><pre><code class="language-">ServiceCoverageHandler
+    ↓
+BenefitLimitationHandler
+    ↓
+OOPMaxHandler ← YOU ARE HERE (Handler #3)
+    ↓
+    ├─ OOP Max MET → OOPMaxCopayHandler
+    └─ OOP Max NOT MET → DeductibleHandler</code></pre></p>
+<p><h3>Key Responsibilities</h3></p>
+<p><li><strong>Check</strong> if OOPMax accumulator exists</li>
+<li><strong>Check</strong> if Family OOPMax is met (= 0)</li>
+<li><strong>Check</strong> if Individual OOPMax is met (= 0)</li>
+<li><strong>Route</strong> to appropriate handler:</li>
+   - <strong>OOP Max MET</strong> → OOPMaxCopayHandler
+   - <strong>OOP Max NOT MET or doesn't exist</strong> → DeductibleHandler</p>
+<p><h3>Handler Characteristics</h3></p>
+<p><li><strong>File</strong>: <code>oopmax_handler.py</code></li>
+<li><strong>Lines of Code</strong>: 36 (routing handler)</li>
+<li><strong>Type</strong>: Routing/Decision Handler</li>
+<li><strong>No Calculation</strong>: Doesn't modify context values</li>
+<li><strong>Purpose</strong>: Routes based on OOPMax status</li>
+<li><strong>Main Method</strong>: <code>process(context)</code></li>
+<li><strong>Branch Methods</strong>: 2 setup methods</li></p>
+<p>---</p>
+<p><h2>2. What is Out-of-Pocket Maximum?</h2></p>
+<p><h3>Definition</h3></p>
+<p><strong>Out-of-Pocket Maximum (OOPMax)</strong> is the maximum amount a member pays for covered healthcare services in a plan year. After reaching this limit, the insurance pays 100% of covered services.</p>
+<p><h3>Key Concepts</h3></p>
+<p><strong>Individual OOPMax:</strong>
+<pre><code class="language-">Maximum: $8,000 per year
+Member has paid: $8,000 (deductible, copays, coinsurance)
+Status: OOP Max MET
+Result: Insurance pays 100% of remaining services</code></pre></p>
+<p><strong>Family OOPMax:</strong>
+<pre><code class="language-">Maximum: $16,000 per year for entire family
+Family has paid: $16,000 total
+Status: OOP Max MET
+Result: Insurance pays 100% for all family members</code></pre></p>
+<p><h3>Real-World Example</h3></p>
+<p><strong>Scenario: Cancer Treatment</strong></p>
+<p><pre><code class="language-">Member's Plan:
+  Individual OOPMax: $8,000
+  Family OOPMax: $16,000</p>
+<p>Healthcare Expenses This Year:
+  January-March: $8,000 (paid by member)
+  
+  April: $5,000 procedure
+  Status: OOP Max MET
+  Member pays: $0 (insurance pays 100%)
+  
+  May-December: All services
+  Member pays: $0 (insurance pays 100%)</code></pre></p>
+<p><h3>Components That Count Toward OOPMax</h3></p>
+<p><strong>Included:</strong>
+<pre><code class="language-">✓ Deductible payments
+✓ Copays
+✓ Coinsurance
+✓ Covered medical expenses</code></pre></p>
+<p><strong>NOT Included:</strong>
+<pre><code class="language-">✗ Premium payments
+✗ Non-covered services
+✗ Out-of-network charges (some plans)</code></pre></p>
+<p><h3>Why OOPMax Matters</h3></p>
+<p><strong>Financial Protection:</strong>
+<li>Caps member's annual medical expenses</li>
+<li>Protects against catastrophic costs</li>
+<li>Provides peace of mind</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-">Without OOPMax:
+  Cancer treatment: $200,000
+  Member pays 20%: $40,000</p>
+<p>With OOPMax ($8,000):
+  Cancer treatment: $200,000
+  Member pays: $8,000 (maximum)
+  Insurance pays: $192,000</code></pre></p>
+<p>---</p>
+<p><h2>3. Handler Overview</h2></p>
+<p><h3>Class Definition</h3></p>
+<p><pre><code class="language-python">class OOPMaxHandler(Handler):
+    """Check if the out of pocket max are met or if an out of pocket max exists"""</code></pre></p>
+<p><strong>Key Words:</strong>
+<li><strong>"Check"</strong> - This is a checking/routing handler</li>
+<li><strong>"met"</strong> - Checks if limit reached (= 0)</li>
+<li><strong>"exists"</strong> - Checks if OOPMax accumulator present</li></p>
+<p><h3>Handler Structure</h3></p>
+<p><pre><code class="language-python">class OOPMaxHandler(Handler):
+    # Branch setup methods
+    def set_deductible_handler(handler)
+    def set_oopmax_copay_handler(handler)
+    
+    # Main routing method
+    def process(context) -> InsuranceContext</code></pre></p>
+<p><h3>No Helper Methods</h3></p>
+<p>This handler:
+<li>✗ No <code>_apply_</code> methods</li>
+<li>✗ No calculations</li>
+<li>✓ Only routing logic</li>
+<li>✓ Checks status and routes</li></p>
+<p><h3>Handler Responsibilities</h3></p>
+<p><pre><code class="language-">┌─────────────────────────────────────────────────┐
+│ OOPMaxHandler                                   │
+├─────────────────────────────────────────────────┤
+│ 1. Check if "oopmax" in accumulator codes      │
+│    - NO → Route to DeductibleHandler           │
+│ 2. Check if Family OOPMax met (= 0)            │
+│    - YES → Route to OOPMaxCopayHandler         │
+│ 3. Check if Individual OOPMax met (= 0)        │
+│    - YES → Route to OOPMaxCopayHandler         │
+│ 4. Otherwise:                                  │
+│    → Route to DeductibleHandler                │
+│ 5. Add trace entries                           │
+└─────────────────────────────────────────────────┘</code></pre></p>
+<p>---</p>
+<p><h2>4. Complete Code Structure</h2></p>
+<p><h3>Full Code (36 Lines)</h3></p>
+<p><pre><code class="language-python">from app.core.base import Handler, InsuranceContext</p>
+<p>class OOPMaxHandler(Handler):
+    """Check if the out of pocket max are met or if an out of pocket max exists"""</p>
+<p>    def set_deductible_handler(self, handler):
+        self._deductible_handler = handler
+        return handler</p>
+<p>    def set_oopmax_copay_handler(self, handler):
+        self._oopmax_copay_handler = handler
+        return handler</p>
+<p>    def process(self, context: InsuranceContext) -> InsuranceContext:
+        # Need to check if we have an OOPMax
+        if "oopmax" not in context.accum_code:
+            context.trace_decision("Process", "A OOPMax was not provided", False)
+            return self._deductible_handler.handle(context)</p>
+<p>        if (
+            "oopmax_family" in context.accum_level
+            and context.oopmax_family_calculated is not None
+            and context.oopmax_family_calculated == 0
+        ):
+            return self._oopmax_copay_handler.handle(context)</p>
+<p>        if (
+            "oopmax_individual" in context.accum_level
+            and context.oopmax_individual_calculated is not None
+            and context.oopmax_individual_calculated == 0
+        ):
+            return self._oopmax_copay_handler.handle(context)</p>
+<p>        return self._deductible_handler.handle(context)</code></pre></p>
+<p><h3>Code Sections</h3></p>
+<p><strong>Lines 1-2: Imports</strong>
+<pre><code class="language-python">from app.core.base import Handler, InsuranceContext</code></pre></p>
+<p><strong>Lines 4-5: Class Definition</strong>
+<pre><code class="language-python">class OOPMaxHandler(Handler):
+    """Check if the out of pocket max are met or if an out of pocket max exists"""</code></pre></p>
+<p><strong>Lines 7-13: Branch Setup</strong>
+<pre><code class="language-python">def set_deductible_handler(handler)
+def set_oopmax_copay_handler(handler)</code></pre></p>
+<p><strong>Lines 15-36: Routing Logic</strong>
+<pre><code class="language-python">def process(context)
+    # Check OOPMax existence and status
+    # Route accordingly</code></pre></p>
+<p>---</p>
+<p><h2>5. Main Method: process()</h2></p>
+<p><h3>Method Signature (Line 15)</h3></p>
+<p><pre><code class="language-python">def process(self, context: InsuranceContext) -> InsuranceContext:</code></pre></p>
+<p><strong>Input:</strong> InsuranceContext with:
+<li><code>accum_code</code>: Set of accumulator codes (includes "oopmax" if exists)</li>
+<li><code>accum_level</code>: Set of accumulator levels ("oopmax_family", "oopmax_individual")</li>
+<li><code>oopmax_family_calculated</code>: Remaining family OOPMax (None or float)</li>
+<li><code>oopmax_individual_calculated</code>: Remaining individual OOPMax (None or float)</li></p>
+<p><strong>Output:</strong> Returns result from delegated handler
+<li>Does NOT modify context itself</li>
+<li>Passes context to chosen handler</li></p>
+<p><h3>Processing Flow</h3></p>
+<p><pre><code class="language-">1. Check if OOPMax exists
+   NO → Route to DeductibleHandler
+   YES → Continue</p>
+<p><li>Check if Family OOPMax met (= 0)</li>
+   YES → Route to OOPMaxCopayHandler
+   NO → Continue</p>
+<p><li>Check if Individual OOPMax met (= 0)</li>
+   YES → Route to OOPMaxCopayHandler
+   NO → Continue</p>
+<p><li>OOPMax exists but not met</li>
+   → Route to DeductibleHandler</code></pre></p>
+<p><h3>Step-by-Step Breakdown</h3></p>
+<p><h4><strong>Step 1: Check if OOPMax Exists (Lines 16-19)</strong></h4></p>
+<p><pre><code class="language-python"><h1>Need to check if we have an OOPMax</h1>
+if "oopmax" not in context.accum_code:
+    context.trace_decision("Process", "A OOPMax was not provided", False)
+    return self._deductible_handler.handle(context)</code></pre></p>
+<p><strong>What This Checks:</strong>
+<li>Is "oopmax" in the set of accumulator codes?</li>
+<li>If NO → Plan doesn't have OOPMax or data not available</li>
+<li>Route to DeductibleHandler (standard processing)</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python"><h1>No OOPMax</h1>
+context.accum_code = {"deductible", "limit"}
+Result: Route to DeductibleHandler</p>
+<p><h1>Has OOPMax</h1>
+context.accum_code = {"deductible", "oopmax"}
+Result: Continue checking</code></pre></p>
+<p><strong>Why Route to DeductibleHandler?</strong>
+<li>If no OOPMax, normal cost-sharing applies</li>
+<li>Member pays deductible, copay, coinsurance</li>
+<li>No special OOPMax processing needed</li></p>
+<p><h4><strong>Step 2: Check if Family OOPMax Met (Lines 21-26)</strong></h4></p>
+<p><pre><code class="language-python">if (
+    "oopmax_family" in context.accum_level
+    and context.oopmax_family_calculated is not None
+    and context.oopmax_family_calculated == 0
+):
+    return self._oopmax_copay_handler.handle(context)</code></pre></p>
+<p><strong>Three Conditions (ALL must be True):</strong></p>
+<p><li><strong>"oopmax_family" in context.accum_level</strong></li>
+   - Family-level OOPMax exists in accumulators</p>
+<p><li><strong>context.oopmax_family_calculated is not None</strong></li>
+   - Value is present (not missing data)</p>
+<p><li><strong>context.oopmax_family_calculated == 0</strong></li>
+   - Remaining amount is zero (MET)</p>
+<p><strong>If All True:</strong>
+<li>Family has reached OOPMax</li>
+<li>Route to OOPMaxCopayHandler</li>
+<li>Special processing for met OOPMax</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">context.accum_level = {"oopmax_family"}
+context.oopmax_family_calculated = 0</p>
+<p>Result: Family OOPMax MET
+Route: OOPMaxCopayHandler</code></pre></p>
+<p><h4><strong>Step 3: Check if Individual OOPMax Met (Lines 28-33)</strong></h4></p>
+<p><pre><code class="language-python">if (
+    "oopmax_individual" in context.accum_level
+    and context.oopmax_individual_calculated is not None
+    and context.oopmax_individual_calculated == 0
+):
+    return self._oopmax_copay_handler.handle(context)</code></pre></p>
+<p><strong>Three Conditions (ALL must be True):</strong></p>
+<p><li><strong>"oopmax_individual" in context.accum_level</strong></li>
+   - Individual-level OOPMax exists</p>
+<p><li><strong>context.oopmax_individual_calculated is not None</strong></li>
+   - Value is present</p>
+<p><li><strong>context.oopmax_individual_calculated == 0</strong></li>
+   - Remaining amount is zero (MET)</p>
+<p><strong>If All True:</strong>
+<li>Individual has reached OOPMax</li>
+<li>Route to OOPMaxCopayHandler</li>
+<li>Special processing for met OOPMax</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">context.accum_level = {"oopmax_individual"}
+context.oopmax_individual_calculated = 0</p>
+<p>Result: Individual OOPMax MET
+Route: OOPMaxCopayHandler</code></pre></p>
+<p><h4><strong>Step 4: Default Route (Line 35)</strong></h4></p>
+<p><pre><code class="language-python">return self._deductible_handler.handle(context)</code></pre></p>
+<p><strong>When This Executes:</strong>
+<li>OOPMax exists BUT</li>
+<li>Neither Family nor Individual OOPMax is met (not = 0)</li>
+<li>Has remaining amount</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-python">context.accum_code = {"oopmax"}
+context.oopmax_individual_calculated = 2000.00  # Not zero</p>
+<p>Result: OOPMax exists but not met
+Route: DeductibleHandler (standard processing)</code></pre></p>
+<p><h3>Visual Flow</h3></p>
+<p><pre><code class="language-">┌──────────────────────────────────┐
+│  START: process(context)         │
+└──────────────┬───────────────────┘
+               ↓
+        ┌──────────────────┐
+        │ "oopmax" in      │
+        │ accum_code?      │
+        └──────┬───────────┘
+               │
+        ┌──────┴──────┐
+        │             │
+       NO            YES
+        │             │
+        ↓             ↓
+    [Deductible]  ┌──────────────────┐
+    [Handler]     │ Family OOPMax    │
+                  │ met (= 0)?       │
+                  └──────┬───────────┘
+                         │
+                  ┌──────┴──────┐
+                  │             │
+                 YES           NO
+                  │             │
+                  ↓             ↓
+            [OOPMaxCopay]  ┌──────────────────┐
+            [Handler]      │ Individual OOPMax│
+                          │ met (= 0)?       │
+                          └──────┬───────────┘
+                                 │
+                          ┌──────┴──────┐
+                          │             │
+                         YES           NO
+                          │             │
+                          ↓             ↓
+                    [OOPMaxCopay]  [Deductible]
+                    [Handler]      [Handler]</code></pre></p>
+<p>---</p>
+<p><h2>6. Branch Setup Methods</h2></p>
+<p><h3>Method 1: set_deductible_handler() (Lines 7-9)</h3></p>
+<p><pre><code class="language-python">def set_deductible_handler(self, handler):
+    self._deductible_handler = handler
+    return handler</code></pre></p>
+<p><strong>Purpose:</strong> Store reference to DeductibleHandler</p>
+<p><strong>Usage:</strong>
+<pre><code class="language-python"><h1>In calculation service setup</h1>
+oopmax_handler.set_deductible_handler(deductible_handler)</code></pre></p>
+<p><strong>Why Needed:</strong>
+<li>Default route when OOPMax not met or doesn't exist</li>
+<li>Standard cost-sharing processing</li></p>
+<p>---</p>
+<p><h3>Method 2: set_oopmax_copay_handler() (Lines 11-13)</h3></p>
+<p><pre><code class="language-python">def set_oopmax_copay_handler(self, handler):
+    self._oopmax_copay_handler = handler
+    return handler</code></pre></p>
+<p><strong>Purpose:</strong> Store reference to OOPMaxCopayHandler</p>
+<p><strong>Usage:</strong>
+<pre><code class="language-python"><h1>In calculation service setup</h1>
+oopmax_handler.set_oopmax_copay_handler(oopmax_copay_handler)</code></pre></p>
+<p><strong>Why Needed:</strong>
+<li>Special route when OOPMax is met</li>
+<li>Handles post-OOPMax cost-sharing (usually $0 or minimal copay)</li></p>
+<p>---</p>
+<p><h2>7. OOPMax Logic Deep Dive</h2></p>
+<p><h3>Understanding OOPMax Status</h3></p>
+<p><strong>OOPMax "Calculated" Values:</strong></p>
+<p><pre><code class="language-">oopmax_family_calculated:
+  Original Limit: $16,000
+  Paid So Far: $10,000
+  Calculated (Remaining): $6,000</p>
+<p>If Paid: $16,000
+  Calculated: $0 (MET)</code></pre></p>
+<p><strong>Zero Means MET:</strong>
+<pre><code class="language-">oopmax_individual_calculated = 0
+Meaning: Member has paid the full OOPMax amount
+Result: Insurance pays 100% of remaining covered services</code></pre></p>
+<p><h3>Family vs Individual OOPMax</h3></p>
+<p><strong>Individual OOPMax:</strong>
+<pre><code class="language-">Plan: $8,000 per person
+Family: John, Jane, Kids</p>
+<p>John pays $8,000
+  John's Individual OOPMax: MET
+  John's services: 100% covered
+  
+Jane pays $5,000
+  Jane's Individual OOPMax: NOT MET
+  Jane's services: Cost-sharing applies</code></pre></p>
+<p><strong>Family OOPMax:</strong>
+<pre><code class="language-">Plan: $16,000 for entire family
+Family total: $16,000 paid</p>
+<p>Result: ALL family members covered 100%
+Even if no individual reached their $8,000 limit</code></pre></p>
+<p><h3>Priority: Family Over Individual</h3></p>
+<p><strong>Handler checks Family FIRST:</strong></p>
+<p><pre><code class="language-python"><h1>Line 21: Check Family first</h1>
+if "oopmax_family" in context.accum_level and ... == 0:
+    return oopmax_copay_handler</p>
+<p><h1>Line 28: Then check Individual</h1>
+if "oopmax_individual" in context.accum_level and ... == 0:
+    return oopmax_copay_handler</code></pre></p>
+<p><strong>Why This Order?</strong>
+<li>Family OOPMax can be met even if individual isn't</li>
+<li>Family met = everyone covered</li>
+<li>Individual met = only that person covered</li></p>
+<p><strong>Example:</strong>
+<pre><code class="language-">Family of 4:
+  Member A: $5,000 paid
+  Member B: $4,000 paid
+  Member C: $3,500 paid
+  Member D: $3,500 paid
+  
+Family Total: $16,000 (FAMILY OOPMAX MET)</p>
+<p>Result:
+  ALL members: 100% covered
+  Even though NO individual reached $8,000</code></pre></p>
+<p>---</p>
+<p><h2>8. Real-World Examples</h2></p>
+<p><h3>Example 1: Individual OOPMax Met</h3></p>
+<p><strong>Member Situation:</strong>
+<pre><code class="language-">Plan: Individual OOPMax = $8,000
+Paid so far: $8,000
+Service today: $500 doctor visit</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"oopmax", "deductible"}
+context.accum_level = {"oopmax_individual"}
+context.oopmax_individual_calculated = 0  # MET</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: Check if OOPMax exists</h1>
+"oopmax" in accum_code? YES → Continue</p>
+<p><h1>Step 2: Check Family OOPMax</h1>
+"oopmax_family" in accum_level? NO → Skip</p>
+<p><h1>Step 3: Check Individual OOPMax</h1>
+"oopmax_individual" in accum_level? YES
+oopmax_individual_calculated is not None? YES
+oopmax_individual_calculated == 0? YES</p>
+<p>Route: OOPMaxCopayHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $0
+Insurance pays: $500 (100%)
+Reason: Individual OOPMax met</code></pre></p>
+<p>---</p>
+<p><h3>Example 2: Family OOPMax Met</h3></p>
+<p><strong>Family Situation:</strong>
+<pre><code class="language-">Plan: Family OOPMax = $16,000
+Family paid: $16,000 (across all members)
+Service today: $2,000 surgery for one member</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"oopmax"}
+context.accum_level = {"oopmax_family", "oopmax_individual"}
+context.oopmax_family_calculated = 0  # FAMILY MET
+context.oopmax_individual_calculated = 5000  # Individual NOT met</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: Check if OOPMax exists</h1>
+"oopmax" in accum_code? YES → Continue</p>
+<p><h1>Step 2: Check Family OOPMax</h1>
+"oopmax_family" in accum_level? YES
+oopmax_family_calculated is not None? YES
+oopmax_family_calculated == 0? YES</p>
+<p>Route: OOPMaxCopayHandler (Family takes priority)</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Member pays: $0
+Insurance pays: $2,000 (100%)
+Reason: Family OOPMax met (even though individual not met)</code></pre></p>
+<p>---</p>
+<p><h3>Example 3: OOPMax Exists But Not Met</h3></p>
+<p><strong>Member Situation:</strong>
+<pre><code class="language-">Plan: Individual OOPMax = $8,000
+Paid so far: $3,000
+Remaining: $5,000
+Service today: $200 doctor visit</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"oopmax", "deductible"}
+context.accum_level = {"oopmax_individual"}
+context.oopmax_individual_calculated = 5000.00  # NOT met (> 0)</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: Check if OOPMax exists</h1>
+"oopmax" in accum_code? YES → Continue</p>
+<p><h1>Step 2: Check Family OOPMax</h1>
+"oopmax_family" in accum_level? NO → Skip</p>
+<p><h1>Step 3: Check Individual OOPMax</h1>
+"oopmax_individual" in accum_level? YES
+oopmax_individual_calculated is not None? YES
+oopmax_individual_calculated == 0? NO (5000 != 0)</p>
+<p><h1>Step 4: Default route</h1>
+Route: DeductibleHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Route: DeductibleHandler (standard processing)
+Member pays: Copay or coinsurance (depends on plan)
+Reason: OOPMax not yet met</code></pre></p>
+<p>---</p>
+<p><h3>Example 4: No OOPMax in Plan</h3></p>
+<p><strong>Member Situation:</strong>
+<pre><code class="language-">Plan: No OOPMax (catastrophic plan or missing data)
+Service today: $1,000 procedure</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"deductible"}  # No "oopmax"
+context.accum_level = {}</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: Check if OOPMax exists</h1>
+"oopmax" in accum_code? NO</p>
+<p><h1>Trace and route</h1>
+context.trace_decision("Process", "A OOPMax was not provided", False)
+Route: DeductibleHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Route: DeductibleHandler (standard processing)
+Member pays: Normal cost-sharing
+Reason: Plan doesn't have OOPMax</code></pre></p>
+<p>---</p>
+<p><h3>Example 5: OOPMax Data Missing (None)</h3></p>
+<p><strong>Member Situation:</strong>
+<pre><code class="language-">Plan: Has OOPMax but accumulator data not returned
+Possible API issue or missing data</code></pre></p>
+<p><strong>Context:</strong>
+<pre><code class="language-python">context.accum_code = {"oopmax"}
+context.accum_level = {"oopmax_individual"}
+context.oopmax_individual_calculated = None  # Missing data</code></pre></p>
+<p><strong>Handler Processing:</strong>
+<pre><code class="language-python"><h1>Step 1: Check if OOPMax exists</h1>
+"oopmax" in accum_code? YES → Continue</p>
+<p><h1>Step 2: Check Family OOPMax</h1>
+"oopmax_family" in accum_level? NO → Skip</p>
+<p><h1>Step 3: Check Individual OOPMax</h1>
+"oopmax_individual" in accum_level? YES
+oopmax_individual_calculated is not None? NO (it's None)</p>
+<p><h1>Condition fails, skip this route</h1></p>
+<p><h1>Step 4: Default route</h1>
+Route: DeductibleHandler</code></pre></p>
+<p><strong>Result:</strong>
+<pre><code class="language-">Route: DeductibleHandler (graceful handling)
+Reason: Data missing, process normally
+Note: This is defensive programming</code></pre></p>
+<p>---</p>
+<p><h2>9. Integration with Handler Chain</h2></p>
+<p><h3>Handler Chain Setup</h3></p>
+<p><strong>From calculation_service_impl.py:</strong></p>
+<p><pre><code class="language-python"><h1>Create handlers</h1>
+oopmax_handler = OOPMaxHandler()
+oopmax_copay_handler = OOPMaxCopayHandler()
+deductible_handler = DeductibleHandler()</p>
+<p><h1>Setup routing</h1>
+oopmax_handler.set_deductible_handler(deductible_handler)
+oopmax_handler.set_oopmax_copay_handler(oopmax_copay_handler)</code></pre></p>
+<p><h3>Position in Chain</h3></p>
+<p><pre><code class="language-">1. ServiceCoverageHandler
+<li>BenefitLimitationHandler</li>
+<li>OOPMaxHandler ← YOU ARE HERE</li>
+   ↓
+   ├─ Route A: OOPMaxCopayHandler (OOPMax met)
+   └─ Route B: DeductibleHandler (OOPMax not met or doesn't exist)</code></pre></p>
+<p><h3>Routing Visualization</h3></p>
+<p><pre><code class="language-">                OOPMaxHandler
+                      ↓
+              ┌───────────────┐
+              │ Has OOPMax?   │
+              └───────┬───────┘
+                      │
+              ┌───────┴────────┐
+              │                │
+             NO               YES
+              │                │
+              ↓                ↓
+      [DeductibleHandler]  ┌─────────────┐
+                          │ Family = 0?  │
+                          └───────┬──────┘
+                                  │
+                          ┌───────┴──────┐
+                          │              │
+                         YES            NO
+                          │              │
+                          ↓              ↓
+                  [OOPMaxCopay]    ┌──────────────┐
+                  [Handler]        │Individual=0? │
+                                  └───────┬───────┘
+                                          │
+                                   ┌──────┴──────┐
+                                   │             │
+                                  YES           NO
+                                   │             │
+                                   ↓             ↓
+                           [OOPMaxCopay]  [Deductible]
+                           [Handler]      [Handler]</code></pre></p>
+<p>---</p>
+<p><h2>10. Complete Code Walkthrough</h2></p>
+<p><h3>Line-by-Line Explanation</h3></p>
+<p><pre><code class="language-python"><h1>LINE 1: Import base classes</h1>
+from app.core.base import Handler, InsuranceContext
+<h1>Handler: Base class for chain of responsibility</h1>
+<h1>InsuranceContext: Data container</h1></p>
+<p><h1>LINE 4: Define OOPMax handler class</h1>
+class OOPMaxHandler(Handler):
+    # Inherits from Handler
+    # Implements process() method
+    
+    
+    # LINE 5: Docstring
+    """Check if the out of pocket max are met or if an out of pocket max exists"""
+    # Two purposes:
+    # 1. Check if OOPMax exists
+    # 2. Check if OOPMax is met (= 0)</p>
+<p>    # LINE 7-9: Setup deductible handler reference
+    def set_deductible_handler(self, handler):
+        # Store reference to DeductibleHandler
+        self._deductible_handler = handler
+        return handler  # Allow chaining
+        # Used when OOPMax not met or doesn't exist</p>
+<p>    # LINE 11-13: Setup OOPMax copay handler reference
+    def set_oopmax_copay_handler(self, handler):
+        # Store reference to OOPMaxCopayHandler
+        self._oopmax_copay_handler = handler
+        return handler  # Allow chaining
+        # Used when OOPMax is met</p>
+<p>    # LINE 15: Main routing method
+    def process(self, context: InsuranceContext) -> InsuranceContext:
+        # Input: InsuranceContext with OOPMax data
+        # Output: Result from delegated handler
+        
+        
+        # LINE 16-19: Check if OOPMax exists
+        # Comment: Need to check if we have an OOPMax
+        if "oopmax" not in context.accum_code:
+            # No OOPMax accumulator present
+            
+            # Add trace entry
+            context.trace_decision("Process", "A OOPMax was not provided", False)
+            
+            # Route to deductible handler (standard processing)
+            return self._deductible_handler.handle(context)
+            # Returns result from DeductibleHandler
+        
+        
+        # LINE 21-26: Check if Family OOPMax met
+        if (
+            # Condition 1: Family level exists
+            "oopmax_family" in context.accum_level
+            # Condition 2: Value is not None
+            and context.oopmax_family_calculated is not None
+            # Condition 3: Value is zero (MET)
+            and context.oopmax_family_calculated == 0
+        ):
+            # All three conditions TRUE → Family OOPMax MET
+            
+            # Route to OOPMax copay handler
+            return self._oopmax_copay_handler.handle(context)
+            # Special processing for met OOPMax
+        
+        
+        # LINE 28-33: Check if Individual OOPMax met
+        if (
+            # Condition 1: Individual level exists
+            "oopmax_individual" in context.accum_level
+            # Condition 2: Value is not None
+            and context.oopmax_individual_calculated is not None
+            # Condition 3: Value is zero (MET)
+            and context.oopmax_individual_calculated == 0
+        ):
+            # All three conditions TRUE → Individual OOPMax MET
+            
+            # Route to OOPMax copay handler
+            return self._oopmax_copay_handler.handle(context)
+            # Special processing for met OOPMax
+        
+        
+        # LINE 35: Default route
+        return self._deductible_handler.handle(context)
+        # OOPMax exists but not met (has remaining amount)
+        # Process with standard cost-sharing</code></pre></p>
+<p>---</p>
+<p><h2>11. Decision Tree and Flow</h2></p>
+<p><h3>Complete Decision Tree</h3></p>
+<p><pre><code class="language-">┌────────────────────────────────────────────┐
+│ START: OOPMaxHandler                       │
+│ Input: accum_code, accum_level,            │
+│        oopmax_family/individual_calculated │
+└──────────────────┬─────────────────────────┘
+                   ↓
+            ┌──────────────┐
+            │ "oopmax" in  │
+            │ accum_code?  │
+            └──────┬───────┘
+                   │
+            ┌──────┴──────┐
+            │             │
+           NO            YES
+            │             │
+            ↓             ↓
+    ┌───────────────┐  ┌──────────────────────────┐
+    │Trace: OOPMax  │  │Check Family OOPMax:      │
+    │not provided   │  │1. "oopmax_family" in     │
+    │               │  │   accum_level?           │
+    │Route:         │  │2. value not None?        │
+    │Deductible     │  │3. value == 0?            │
+    │Handler        │  └──────────┬───────────────┘
+    └───────────────┘             │
+                           ┌──────┴──────┐
+                           │             │
+                          ALL           NOT ALL
+                          TRUE          TRUE
+                           │             │
+                           ↓             ↓
+                   ┌───────────────┐  ┌──────────────────────┐
+                   │Route:         │  │Check Individual:     │
+                   │OOPMaxCopay    │  │1. "oopmax_individual"│
+                   │Handler        │  │   in accum_level?    │
+                   └───────────────┘  │2. value not None?    │
+                                     │3. value == 0?        │
+                                     └──────────┬───────────┘
+                                                │
+                                         ┌──────┴──────┐
+                                         │             │
+                                        ALL           NOT ALL
+                                        TRUE          TRUE
+                                         │             │
+                                         ↓             ↓
+                                 ┌───────────────┐  ┌───────────────┐
+                                 │Route:         │  │Route:         │
+                                 │OOPMaxCopay    │  │Deductible     │
+                                 │Handler        │  │Handler        │
+                                 └───────────────┘  └───────────────┘</code></pre></p>
+<p><h3>Flow Summary Table</h3></p>
+<p>| Condition | Family OOPMax | Individual OOPMax | Route To |
+|-----------|---------------|-------------------|----------|
+| No "oopmax" | N/A | N/A | DeductibleHandler |
+| Has "oopmax", Family = 0 | MET | Any | OOPMaxCopayHandler |
+| Has "oopmax", Family > 0, Individual = 0 | NOT MET | MET | OOPMaxCopayHandler |
+| Has "oopmax", both > 0 | NOT MET | NOT MET | DeductibleHandler |
+| Has "oopmax", values = None | Data Missing | Data Missing | DeductibleHandler |</p>
+<p>---</p>
+<p><h2>12. Impact and Importance</h2></p>
+<p><h3>Why This Handler Matters</h3></p>
+<p><strong>Financial Protection:</strong>
+<pre><code class="language-">✓ Ensures members don't overpay after reaching OOPMax
+✓ Enforces 100% coverage when limit met
+✓ Protects against catastrophic costs</code></pre></p>
+<p><strong>Correct Routing:</strong>
+<pre><code class="language-">✓ Routes to special handler when OOPMax met
+✓ Standard processing when not met
+✓ Graceful handling when data missing</code></pre></p>
+<p><strong>Member Experience:</strong>
+<pre><code class="language-">✓ Clear: "You've reached your out-of-pocket maximum"
+✓ Accurate: No charges when limit met
+✓ Transparent: Member understands protection</code></pre></p>
+<p><h3>Real-World Impact</h3></p>
+<p><strong>Scenario: Cancer Treatment</strong></p>
+<p><pre><code class="language-">Without OOPMaxHandler:
+  Member reached $8,000 OOPMax
+  System continues charging copays
+  Member pays extra $500
+  ERROR: Should be $0</p>
+<p>With OOPMaxHandler:
+  Detects OOPMax met (= 0)
+  Routes to OOPMaxCopayHandler
+  Member pays $0
+  CORRECT: 100% coverage</code></pre></p>
+<p><h3>Performance Impact</h3></p>
+<p><strong>Early OOPMax Check:</strong>
+<pre><code class="language-">Position: Handler #3 (early in chain)
+Benefit: Catches met OOPMax before complex calculations
+Result: Faster processing for met members</code></pre></p>
+<p><strong>Defensive Programming:</strong>
+<pre><code class="language-">✓ Checks if OOPMax exists before processing
+✓ Validates data not None before comparison
+✓ Graceful fallback to DeductibleHandler
+✓ Prevents null pointer errors</code></pre></p>
+<p>---</p>
+<p><h2>Summary</h2></p>
+<p><h3>What We Learned</h3></p>
+<p><li><strong>OOPMaxHandler</strong> checks if member has reached annual out-of-pocket maximum</li></p>
+<p><li><strong>Out-of-Pocket Maximum:</strong></li>
+   - Maximum member pays per year
+   - After met: Insurance pays 100%
+   - Protects against catastrophic costs</p>
+<p><li><strong>Two Types:</strong></li>
+   - <strong>Family OOPMax</strong>: Total for all family members
+   - <strong>Individual OOPMax</strong>: Per person</p>
+<p><li><strong>Three Checks:</strong></li>
+   - Does OOPMax exist?
+   - Is Family OOPMax met (= 0)?
+   - Is Individual OOPMax met (= 0)?</p>
+<p><li><strong>Two Routes:</strong></li>
+   - <strong>OOPMax MET</strong> → OOPMaxCopayHandler
+   - <strong>OOPMax NOT MET</strong> → DeductibleHandler</p>
+<p><li><strong>Priority:</strong> Family checked before Individual</li></p>
+<p><li><strong>Defensive:</strong> Handles missing data gracefully</li></p>
+<p><h3>Key Takeaways</h3></p>
+<p>✓ <strong>Routing Handler</strong>: Doesn't calculate, only routes
+✓ <strong>Financial Protection</strong>: Enforces OOPMax limits
+✓ <strong>Early Check</strong>: Handler #3 in chain
+✓ <strong>Family Priority</strong>: Checks family before individual
+✓ <strong>Defensive Programming</strong>: Validates data before comparison
+✓ <strong>Graceful Degradation</strong>: Routes to DeductibleHandler if data missing</p>
+<p><h3>Real-World Value</h3></p>
+<p><strong>Ensures:</strong>
+<li>Members don't overpay after reaching limit</li>
+<li>Correct 100% coverage when OOPMax met</li>
+<li>Proper handling of family vs individual limits</li>
+<li>Graceful handling of missing data</li></p>
+<p><strong>Prevents:</strong>
+<li>Overcharging members who met OOPMax</li>
+<li>Processing errors with missing data</li>
+<li>Incorrect cost calculations</li>
+<li>Member dissatisfaction</li></p>
+<p>---</p>
+<p><strong>End of OOPMax Handler Deep Dive</strong>
+</p>
+    </div>
+    <div class="footer">
+        <p><strong>OOPMax Handler - Technical Documentation</strong></p>
+        <p>© 2025 | Complete Deep Dive of oopmax_handler.py</p>
+    </div>
+</body>
+</html>
