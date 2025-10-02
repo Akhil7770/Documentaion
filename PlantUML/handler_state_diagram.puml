@@ -1,0 +1,166 @@
+@startuml Handler State Transitions
+
+title Handler State Diagram - All Possible Routes
+
+skinparam state {
+  BackgroundColor<<Routing>> LightBlue
+  BackgroundColor<<Calculation>> LightGreen
+  BackgroundColor<<Terminal>> Salmon
+  BorderColor Black
+  FontSize 11
+}
+
+[*] --> ServiceCoverage : Start Calculation
+
+state "H1: Service Coverage" as ServiceCoverage <<Terminal>> {
+  ServiceCoverage : **Type:** Routing + Terminal
+  ServiceCoverage : **Decision:** Is service covered?
+  ServiceCoverage : **Terminal If:** Service NOT covered
+}
+
+state "H2: Benefit Limitation" as BenefitLimit <<Terminal>> {
+  BenefitLimit : **Type:** Calculation + Terminal
+  BenefitLimit : **Decision:** Check annual limits
+  BenefitLimit : **Terminal If:** Limit reached
+}
+
+state "H3: OOPMax Check" as OOPMaxCheck <<Routing>> {
+  OOPMaxCheck : **Type:** Pure Routing
+  OOPMaxCheck : **Decision:** Is OOPMax met?
+  OOPMaxCheck : **Routes:** Deductible OR OOPMaxCopay
+}
+
+state "H4: OOPMax Copay" as OOPMaxCopay <<Terminal>> {
+  OOPMaxCopay : **Type:** Terminal Calculation
+  OOPMaxCopay : **Decision:** Apply copay when OOPMax met
+  OOPMaxCopay : **Always:** Ends calculation
+}
+
+state "H5: Deductible Check" as DeductibleCheck <<Routing>> {
+  DeductibleCheck : **Type:** Pure Routing
+  DeductibleCheck : **Decision:** Deductible status
+  DeductibleCheck : **Routes:** 4 possible handlers!
+}
+
+state "H6: CostShare CoPay" as CostShareCoPay <<Calculation>> {
+  CostShareCoPay : **Type:** Calculation + Routing
+  CostShareCoPay : **Decision:** Apply copay (no deductible)
+  CostShareCoPay : **Routes:** CoInsurance OR OOPMaxCopay
+}
+
+state "H7: Deductible CostShare CoPay" as DedCostShareCoPay <<Routing>> {
+  DedCostShareCoPay : **Type:** Pure Routing
+  DedCostShareCoPay : **Decision:** Copay or coinsurance?
+  DedCostShareCoPay : **Context:** Deductible already met
+}
+
+state "H8: Deductible CoPay" as DedCoPay <<Calculation>> {
+  DedCoPay : **Type:** Complex Calculation
+  DedCoPay : **Decision:** Apply copay with deductible
+  DedCoPay : **Routes:** Multiple (271 lines!)
+}
+
+state "H9: Deductible OOPMax" as DedOOPMax <<Calculation>> {
+  DedOOPMax : **Type:** Calculation + Routing
+  DedOOPMax : **Decision:** Apply deductible payment
+  DedOOPMax : **Routes:** Based on deductible order
+}
+
+state "H10: Deductible CoInsurance" as DedCoIns <<Terminal>> {
+  DedCoIns : **Type:** Terminal Calculation
+  DedCoIns : **Decision:** Apply coinsurance (%)
+  DedCoIns : **Always:** Ends calculation
+}
+
+' Transitions from ServiceCoverage
+ServiceCoverage --> [*] : Service NOT Covered\nmember_pays = 100%
+ServiceCoverage --> BenefitLimit : Service Covered ✓
+
+' Transitions from BenefitLimit
+BenefitLimit --> [*] : Limit Reached\ncalculation_complete
+BenefitLimit --> OOPMaxCheck : No Limit\nor Within Limit
+
+' Transitions from OOPMaxCheck
+OOPMaxCheck --> OOPMaxCopay : OOPMax MET\n(Family or Individual)
+OOPMaxCheck --> DeductibleCheck : OOPMax NOT met\nOR No OOPMax
+
+' Transitions from OOPMaxCopay
+OOPMaxCopay --> [*] : Always Completes\ncalculation_complete = TRUE
+
+' Transitions from DeductibleCheck (4 routes!)
+DeductibleCheck --> CostShareCoPay : No Deductible\nOR Check Family/Individual
+DeductibleCheck --> DedCostShareCoPay : Deductible MET\n(Family/Individual/Embedded)
+DeductibleCheck --> DedCoPay : Deductible NOT met\nAND deductible AFTER copay
+DeductibleCheck --> DedOOPMax : Deductible NOT met\nAND deductible BEFORE copay
+
+' Transitions from CostShareCoPay
+CostShareCoPay --> [*] : Service < Copay\ncalculation_complete
+CostShareCoPay --> DedCoIns : Normal copay applied\nservice remains
+CostShareCoPay --> OOPMaxCopay : OOPMax about to be met\nAND copay continues
+
+' Transitions from DedCostShareCoPay
+DedCostShareCoPay --> DedCoPay : copay_continue = TRUE\nAND copay > 0
+DedCostShareCoPay --> DedCoIns : copay_continue = FALSE\nOR copay = 0
+
+' Transitions from DedCoPay (complex!)
+DedCoPay --> [*] : OOPMax met\nOR service consumed
+DedCoPay --> DedCoIns : Deductible BEFORE copay\nAND service remains
+DedCoPay --> DedOOPMax : Deductible AFTER copay\nAND service remains
+DedCoPay --> OOPMaxCopay : OOPMax about to be met
+
+' Transitions from DedOOPMax
+DedOOPMax --> [*] : Service fully consumed\nby deductible
+DedOOPMax --> DedCostShareCoPay : Deductible BEFORE copay\nAND deductible now met
+DedOOPMax --> DedCoIns : Deductible AFTER copay\nAND service remains
+
+' Transitions from DedCoIns
+DedCoIns --> [*] : Always Completes\ncalculation_complete = TRUE
+
+note right of OOPMaxCheck
+  **OOPMax Priority:**
+  1. Check Family first
+  2. Then Individual
+  3. If neither met → continue
+end note
+
+note right of DeductibleCheck
+  **4 Possible Routes:**
+  1. CostShareCoPay
+     (no deductible or check status)
+  2. DedCostShareCoPay
+     (deductible MET)
+  3. DedCoPay
+     (deductible AFTER copay)
+  4. DedOOPMax
+     (deductible BEFORE copay)
+end note
+
+note left of DedCoIns
+  **Final Handler**
+  All paths eventually
+  lead here or to a
+  terminal handler
+end note
+
+legend right
+  **Handler Classification:**
+  |<#LightBlue> Routing | Makes decisions, routes to next handler |
+  |<#LightGreen> Calculation | Calculates amounts AND routes |
+  |<#Salmon> Terminal | Can end calculation |
+  
+  **Common Paths:**
+  Path A: Coverage → Limits → OOPMax → Deductible → 
+          OOPMax Apply → CostShare → CoInsurance ✓
+  
+  Path B: Coverage → Limits → OOPMax MET → 
+          OOPMaxCopay → DONE ✓
+  
+  Path C: Coverage → NOT Covered → DONE ✓
+  
+  **Total Handlers:** 10
+  **Routing Handlers:** 3 (H3, H5, H7)
+  **Calculation Handlers:** 4 (H6, H8, H9, H2)
+  **Terminal Handlers:** 3 (H4, H10, H1 conditional)
+endlegend
+
+@enduml
