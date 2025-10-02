@@ -1,0 +1,255 @@
+@startuml Handler Class Structure
+
+title Handler Class Hierarchy and Dependencies
+
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor White
+  BorderColor Black
+  ArrowColor Black
+}
+
+abstract class Handler {
+  # _next_handler: Handler
+  --
+  + set_next(handler: Handler): Handler
+  + handle(context: InsuranceContext): InsuranceContext
+  {abstract} + process(context: InsuranceContext): InsuranceContext
+}
+
+class InsuranceContext {
+  + service_amount: float
+  + member_pays: float
+  + is_service_covered: bool
+  + deductible_individual_calculated: float
+  + deductible_family_calculated: float
+  + oopmax_individual_calculated: float
+  + oopmax_family_calculated: float
+  + cost_share_copay: float
+  + cost_share_coinsurance: float
+  + limit_calculated: float
+  + calculation_complete: bool
+  + accum_code: List[str]
+  + accum_level: List[str]
+  + is_deductible_before_copay: bool
+  + copay_applies_oop: bool
+  + deductible_applies_oop: bool
+  + coins_applies_oop: bool
+  + copay_continue_when_deductible_met: bool
+  + copay_continue_when_oop_met: bool
+  + trace_entries: List[TraceEntry]
+  --
+  + trace(method: str, message: str): void
+  + trace_decision(method: str, message: str, result: bool): void
+  + populate_from_benefit(benefit: SelectedBenefit, amount: float): InsuranceContext
+}
+
+class ServiceCoverageHandler {
+  + process(context): InsuranceContext
+  - _apply_no_coverage(context): InsuranceContext
+}
+
+class BenefitLimitationHandler {
+  - _oopmax_handler: Handler
+  - _deductible_cost_share_co_handler: Handler
+  --
+  + set_oopmax_handler(handler): Handler
+  + set_deductible_cost_share_co_handler(handler): Handler
+  + process(context): InsuranceContext
+  - _apply_limitation(context): InsuranceContext
+  - _apply_partial_limit(context): InsuranceContext
+  - _apply_within_limit(context): InsuranceContext
+}
+
+class OOPMaxHandler {
+  - _deductible_handler: Handler
+  - _oopmax_copay_handler: Handler
+  --
+  + set_deductible_handler(handler): Handler
+  + set_oopmax_copay_handler(handler): Handler
+  + process(context): InsuranceContext
+}
+
+class OOPMaxCopayHandler {
+  + process(context): InsuranceContext
+  - _apply_zero_copay(context): InsuranceContext
+  - _apply_member_pays_full_amount(context): InsuranceContext
+  - _apply_member_pays_cost_share_amount(context): InsuranceContext
+}
+
+class DeductibleHandler {
+  - _deductible_oopmax_handler: Handler
+  - _cost_share_co_pay_handler: Handler
+  - _deductible_cost_share_co_pay_handler: Handler
+  - _deductible_co_pay_handler: Handler
+  --
+  + set_deductible_oopmax_handler(handler): Handler
+  + set_cost_share_co_pay_handler(handler): Handler
+  + set_deductible_cost_share_co_pay_handler(handler): Handler
+  + set_deductible_co_pay_handler(handler): Handler
+  + process(context): InsuranceContext
+}
+
+class CostShareCoPayHandler {
+  - _oopmax_copay_handler: Handler
+  - _deductible_co_insurance_handler: Handler
+  --
+  + set_oopmax_copay_handler(handler): Handler
+  + set_deductible_co_insurance_handler(handler): Handler
+  + process(context): InsuranceContext
+  - _calculate_min_oopmax(context): float
+  - _apply_member_pays_cost_share_copay(context): InsuranceContext
+  - _apply_member_pays_oopmax_difference(context): InsuranceContext
+  - _apply_member_pays_service_amount(context): InsuranceContext
+}
+
+class DeductibleCostShareCoPayHandler {
+  - _deductible_co_pay_handler: Handler
+  - _deductible_co_insurance_handler: Handler
+  --
+  + set_deductible_co_pay_handler(handler): Handler
+  + set_deductible_co_insurance_handler(handler): Handler
+  + process(context): InsuranceContext
+}
+
+class DeductibleCoPayHandler {
+  - _deductible_oopmax_handler: Handler
+  - _oopmax_co_pay_handler: Handler
+  - _deductible_co_insurance_handler: Handler
+  --
+  + set_deductible_oopmax_handler(handler): Handler
+  + set_oopmax_copay_handler(handler): Handler
+  + set_deductible_co_insurance_handler(handler): Handler
+  + process(context): InsuranceContext
+  - _apply_member_pays_remaining_service_amount(context): InsuranceContext
+  - _apply_member_pays_no_co_pay(context): InsuranceContext
+  - _apply_member_pays_remaining_service_amount_and_oopmax_updated(context): InsuranceContext
+  - _apply_member_pays_co_pay_and_oopmax_updated(context): InsuranceContext
+  - _apply_member_pays_co_pay_and_oopmax_not_updated(context): InsuranceContext
+  - _apply_member_pays_lesser_of_oopmax_oopmax_met_indicator(context): InsuranceContext
+  - _apply_costshare_copay_deductible(context): InsuranceContext
+  - _calculate_min_oopmax(context): float
+}
+
+class DeductibleOOPMaxHandler {
+  - _deductible_co_insurance_handler: Handler
+  - _deductible_cost_share_co_pay_handler: Handler
+  --
+  + set_deductible_co_insurance_handler(handler): Handler
+  + set_deductible_cost_share_co_pay_handler(handler): Handler
+  + process(context): InsuranceContext
+  - _apply_member_pays_service_or_individual_deductible_not_applied_to_oopmax(context): InsuranceContext
+  - _apply_member_pays_service_or_individual_deductible_is_applied_to_oopmax(context): InsuranceContext
+}
+
+class DeductibleCoInsuranceHandler {
+  + process(context): InsuranceContext
+  - _apply_member_pays_no_co_insurance(context): InsuranceContext
+  - _apply_member_pays_co_insurance_and_not_applied_to_oopmax(context): InsuranceContext
+  - _apply_member_family_oopmax_met(context): InsuranceContext
+  - _apply_member_individual_oopmax_met(context): InsuranceContext
+  - _apply_member_pays_co_insurance_and_applied_to_oopmax(context): InsuranceContext
+  - _apply_member_pays_oopmax_difference(context): InsuranceContext
+}
+
+class CalculationServiceImpl {
+  - chain: Handler
+  --
+  + find_highest_member_pay(service_amount: float, benefits: List): InsuranceContext
+  - create_calculation_chain(): Handler
+}
+
+' Inheritance relationships
+Handler <|-- ServiceCoverageHandler
+Handler <|-- BenefitLimitationHandler
+Handler <|-- OOPMaxHandler
+Handler <|-- OOPMaxCopayHandler
+Handler <|-- DeductibleHandler
+Handler <|-- CostShareCoPayHandler
+Handler <|-- DeductibleCostShareCoPayHandler
+Handler <|-- DeductibleCoPayHandler
+Handler <|-- DeductibleOOPMaxHandler
+Handler <|-- DeductibleCoInsuranceHandler
+
+' Usage relationships
+Handler ..> InsuranceContext : uses
+CalculationServiceImpl --> Handler : creates chain
+CalculationServiceImpl ..> InsuranceContext : processes
+
+' Handler dependencies (routing)
+ServiceCoverageHandler --> BenefitLimitationHandler : next
+BenefitLimitationHandler --> OOPMaxHandler : routes to
+BenefitLimitationHandler ..> DeductibleCostShareCoPayHandler : can route to
+OOPMaxHandler --> DeductibleHandler : routes to
+OOPMaxHandler --> OOPMaxCopayHandler : routes to
+DeductibleHandler --> CostShareCoPayHandler : can route to
+DeductibleHandler --> DeductibleCostShareCoPayHandler : can route to
+DeductibleHandler --> DeductibleCoPayHandler : can route to
+DeductibleHandler --> DeductibleOOPMaxHandler : can route to
+CostShareCoPayHandler --> DeductibleCoInsuranceHandler : routes to
+CostShareCoPayHandler --> OOPMaxCopayHandler : can route to
+DeductibleCostShareCoPayHandler --> DeductibleCoPayHandler : can route to
+DeductibleCostShareCoPayHandler --> DeductibleCoInsuranceHandler : routes to
+DeductibleCoPayHandler --> DeductibleCoInsuranceHandler : can route to
+DeductibleCoPayHandler --> DeductibleOOPMaxHandler : can route to
+DeductibleCoPayHandler --> OOPMaxCopayHandler : can route to
+DeductibleOOPMaxHandler --> DeductibleCoInsuranceHandler : can route to
+DeductibleOOPMaxHandler --> DeductibleCostShareCoPayHandler : can route to
+
+note top of Handler
+  **Base Handler Class**
+  Implements Chain of Responsibility pattern
+  
+  Key Methods:
+  • set_next() - Sets next handler in chain
+  • handle() - Calls process() then routes
+  • process() - Abstract method for logic
+end note
+
+note top of InsuranceContext
+  **Central Data Container**
+  Contains all calculation data:
+  • Input values
+  • Benefit rules
+  • Accumulator values
+  • Calculation results
+  • Tracing for debugging
+end note
+
+note bottom of CalculationServiceImpl
+  **Chain Creator**
+  Sets up the complete handler chain:
+  1. Creates all 10 handlers
+  2. Wires them together
+  3. Returns first handler (ServiceCoverage)
+  4. Processes multiple benefits in parallel
+  5. Returns highest member_pays
+end note
+
+note right of DeductibleHandler
+  **Most Complex Router**
+  Has 4 different handlers
+  it can route to based on:
+  • Deductible status
+  • Deductible order
+  • Copay existence
+end note
+
+note right of DeductibleCoPayHandler
+  **Most Complex Handler**
+  271 lines of code!
+  Handles interaction of:
+  • Deductible
+  • Copay
+  • OOPMax
+  6 different calculation methods
+end note
+
+note bottom of DeductibleCoInsuranceHandler
+  **Terminal Handler**
+  Last handler in chain
+  Always completes calculation
+  Applies coinsurance (%)
+end note
+
+@enduml
