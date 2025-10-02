@@ -1,0 +1,379 @@
+@startuml Handler Chain Flow - Cost Estimator Service
+
+title Cost Estimator Calculation Handler Chain\n10 Handlers with Dynamic Routing
+
+skinparam defaultTextAlignment center
+skinparam BoxPadding 10
+skinparam ParticipantPadding 20
+skinparam SequenceMessageAlign center
+skinparam roundcorner 10
+
+' Define colors
+skinparam activity {
+  BackgroundColor<<Routing>> LightBlue
+  BackgroundColor<<Calculation>> LightGreen
+  BackgroundColor<<Terminal>> Salmon
+  BackgroundColor<<Start>> LightYellow
+  BorderColor Black
+}
+
+start
+
+:**InsuranceContext Created**\nservice_amount, benefit rules,\naccumulator values, etc.;
+note right
+  Contains all data:
+  - Service amount
+  - Deductible values
+  - OOPMax values
+  - Copay/Coinsurance rates
+  - All plan rules
+end note
+
+' ==================== HANDLER 1 ====================
+partition "**Handler #1: ServiceCoverageHandler**" #LightYellow {
+  :Check if service is covered;
+  
+  if (is_service_covered?) then (NO)
+    :❌ **Service NOT Covered**;
+    :member_pays = service_amount\nservice_amount = 0\ncalculation_complete = TRUE;
+    stop
+  else (YES)
+    :✓ Service is covered\nContinue to next handler;
+  endif
+}
+
+' ==================== HANDLER 2 ====================
+partition "**Handler #2: BenefitLimitationHandler**" #LightBlue {
+  :Check benefit limits;
+  
+  if (Has "limit" in accum_code?) then (NO)
+    :No benefit limitation\nContinue;
+  elseif (limit_calculated == 0?) then (YES - LIMIT REACHED)
+    :❌ **Benefit Limit Reached**;
+    :member_pays += service_amount\nservice_amount = 0\ncalculation_complete = TRUE;
+    stop
+  elseif (limit_type == "dollar"?) then (YES)
+    :Call OOPMaxHandler first;
+    if (service_amount > limit_calculated?) then (YES)
+      :⚠️ **Partial Limit**;
+      :member_pays += (service - limit)\nlimit_calculated = 0\ncalculation_complete = TRUE;
+      stop
+    else (NO)
+      :✓ **Within Limit**;
+      :limit_calculated -= service_amount\ncalculation_complete = TRUE;
+      stop
+    endif
+  elseif (limit_type == "counter"?) then (YES)
+    :Call OOPMaxHandler first;
+    :limit_calculated -= 1\ncalculation_complete = TRUE;
+    stop
+  else (UNKNOWN)
+    :❌ Exception: Unknown limit type;
+    stop
+  endif
+}
+
+' ==================== HANDLER 3 ====================
+partition "**Handler #3: OOPMaxHandler**" #LightBlue {
+  :Check OOPMax status;
+  note right
+    ROUTING HANDLER
+    Checks if OOPMax is met
+    (Family checked first)
+  end note
+  
+  if (Has "oopmax" in accum_code?) then (NO)
+    :No OOPMax provided;
+    :→ **DeductibleHandler**;
+  elseif (oopmax_family_calculated == 0?) then (YES)
+    :✓ **Family OOPMax MET**;
+    :→ **OOPMaxCopayHandler**;
+  elseif (oopmax_individual_calculated == 0?) then (YES)
+    :✓ **Individual OOPMax MET**;
+    :→ **OOPMaxCopayHandler**;
+  else (NO - OOPMax NOT MET)
+    :OOPMax not met yet;
+    :→ **DeductibleHandler**;
+  endif
+}
+
+' ==================== HANDLER 4 (Alternative Path) ====================
+partition "**Handler #4: OOPMaxCopayHandler**" #Salmon {
+  :Determine copay when OOPMax met;
+  note right
+    TERMINAL HANDLER
+    Handles payment when
+    OOPMax is met
+  end note
+  
+  if (cost_share_copay > 0?) then (NO)
+    :member_pays = 0\ncalculation_complete = TRUE;
+    stop
+  elseif (copay_continue_when_oop_met?) then (NO)
+    :member_pays = 0\ncalculation_complete = TRUE;
+    stop
+  elseif (cost_share_copay > service_amount?) then (YES)
+    :member_pays += service_amount\nservice_amount = 0\ncalculation_complete = TRUE;
+    stop
+  else (NO)
+    :member_pays += cost_share_copay\nservice_amount -= copay\ncalculation_complete = TRUE;
+    stop
+  endif
+}
+
+' ==================== HANDLER 5 ====================
+partition "**Handler #5: DeductibleHandler**" #LightBlue {
+  :Check deductible status;
+  note right
+    ROUTING HANDLER
+    Most complex routing logic
+    4 possible routes!
+  end note
+  
+  if (Has "deductible" in accum_code?) then (NO)
+    :No deductible accumulators;
+    :→ **CostShareCoPayHandler**;
+  elseif (deductible_family_calculated == 0?) then (YES)
+    :✓ Family deductible MET;
+    :→ **DeductibleCostShareCoPayHandler**;
+  elseif (numOfIndividualsMet == numOfIndividualsNeededToMeet?) then (YES)
+    :✓ Embedded deductible MET;
+    :→ **DeductibleCostShareCoPayHandler**;
+  elseif (deductible_individual_calculated == 0?) then (YES)
+    :✓ Individual deductible MET;
+    :→ **DeductibleCostShareCoPayHandler**;
+  elseif (is_deductible_before_copay?) then (NO)
+    :Deductible AFTER copay;
+    if (cost_share_copay > 0?) then (YES)
+      :→ **DeductibleCoPayHandler**;
+    else (NO)
+      :→ **DeductibleOOPMaxHandler**;
+    endif
+  else (YES)
+    :Deductible BEFORE copay;
+    :→ **DeductibleOOPMaxHandler**;
+  endif
+}
+
+' ==================== HANDLER 6 ====================
+partition "**Handler #6: CostShareCoPayHandler**" #LightGreen {
+  :Apply copay when deductible met/absent;
+  note right
+    CALCULATION + ROUTING
+    Called when deductible
+    already met or doesn't exist
+  end note
+  
+  :Calculate min_oopmax = min(individual, family);
+  
+  if (copay > 0 AND copay > service_amount?) then (YES)
+    if (service_amount < min_oopmax?) then (YES)
+      :✓ **Service < OOPMax**;
+      :member_pays += service_amount\noopmax -= service_amount\nservice_amount = 0\ncalculation_complete = TRUE;
+      stop
+    else (NO)
+      :⚠️ **OOPMax will be met**;
+      :member_pays += min_oopmax\noopmax = 0;
+      if (copay_continue_when_oop_met?) then (YES)
+        :→ **OOPMaxCopayHandler**;
+      else (NO)
+        :calculation_complete = TRUE;
+        stop
+      endif
+    endif
+  else (NO)
+    if (copay < individual_oopmax\nAND copay < family_oopmax?) then (YES)
+      :✓ **Normal copay**;
+      :member_pays += copay\noopmax -= copay\nservice_amount -= copay;
+      :→ **DeductibleCoInsuranceHandler**;
+    else (NO)
+      :⚠️ **OOPMax will be met**;
+      :member_pays += min_oopmax\noopmax = 0;
+      if (copay_continue_when_oop_met?) then (YES)
+        :→ **OOPMaxCopayHandler**;
+      else (NO)
+        :calculation_complete = TRUE;
+        stop
+      endif
+    endif
+  endif
+}
+
+' ==================== HANDLER 7 ====================
+partition "**Handler #7: DeductibleCostShareCoPayHandler**" #LightBlue {
+  :Route: Copay or Coinsurance after deductible met;
+  note right
+    ROUTING HANDLER
+    Simple 2-way routing
+    Deductible is MET
+  end note
+  
+  if (copay_continue_when_deductible_met?) then (YES)
+    if (cost_share_copay > 0?) then (YES)
+      :→ **DeductibleCoPayHandler**;
+    else (NO)
+      :→ **DeductibleCoInsuranceHandler**;
+    endif
+  else (NO)
+    :→ **DeductibleCoInsuranceHandler**;
+  endif
+}
+
+' ==================== HANDLER 8 ====================
+partition "**Handler #8: DeductibleCoPayHandler**" #LightGreen {
+  :Apply copay with deductible interaction;
+  note right
+    CALCULATION + ROUTING
+    Most complex handler (271 lines)
+    Handles deductible + copay + OOPMax
+  end note
+  
+  if (oopmax_family_calculated == 0?) then (YES)
+    :✓ Family OOPMax MET;
+    :member_pays = 0\ncalculation_complete = TRUE;
+    stop
+  elseif (oopmax_individual_calculated == 0?) then (YES)
+    :✓ Individual OOPMax MET;
+    :member_pays = 0\ncalculation_complete = TRUE;
+    stop
+  elseif (copay_applies_oop?) then (NO)
+    :Copay does NOT count to OOPMax;
+    if (copay > service_amount?) then (YES)
+      :member_pays += service_amount\nservice_amount = 0\ncalculation_complete = TRUE;
+      stop
+    else (NO)
+      :member_pays += copay\nservice_amount -= copay;
+      if (is_deductible_before_copay?) then (YES)
+        :→ **DeductibleCoInsuranceHandler**;
+      else (NO)
+        if (copay_count_to_deductible?) then (YES)
+          :deductible -= copay;
+        endif
+        :→ **DeductibleOOPMaxHandler**;
+      endif
+    endif
+  else (YES - copay DOES count to OOPMax)
+    if (copay > service_amount?) then (YES)
+      :Calculate min_oopmax;
+      if (service_amount < min_oopmax?) then (YES)
+        :member_pays += service_amount\noopmax -= service_amount\nservice_amount = 0\ncalculation_complete = TRUE;
+        stop
+      else (NO)
+        :member_pays += min_oopmax\noopmax = 0;
+        :→ **OOPMaxCopayHandler**;
+      endif
+    else (NO)
+      if (copay > individual_oopmax\nAND copay > family_oopmax?) then (YES)
+        :member_pays += min_oopmax\noopmax = 0;
+        :→ **OOPMaxCopayHandler**;
+      else (NO)
+        :member_pays += copay\noopmax -= copay\nservice_amount -= copay;
+        if (is_deductible_before_copay?) then (YES)
+          :→ **DeductibleCoInsuranceHandler**;
+        else (NO)
+          if (copay_count_to_deductible?) then (YES)
+            :deductible -= copay;
+          endif
+          :→ **DeductibleOOPMaxHandler**;
+        endif
+      endif
+    endif
+  endif
+}
+
+' ==================== HANDLER 9 ====================
+partition "**Handler #9: DeductibleOOPMaxHandler**" #LightGreen {
+  :Apply deductible payment;
+  note right
+    CALCULATION + ROUTING
+    Deductible NOT met
+    Applies deductible charges
+  end note
+  
+  if (deductible_applies_oop?) then (YES)
+    :Deductible counts to OOPMax;
+    if (service_amount < deductible_calculated?) then (YES)
+      :member_pays += service_amount\ndeductible -= service_amount\noopmax -= service_amount\nservice_amount = 0\ncalculation_complete = TRUE;
+      stop
+    else (NO)
+      :member_pays += deductible_calculated\nservice_amount -= deductible_calculated\noopmax -= deductible_calculated\ndeductible_calculated = 0;
+    endif
+  else (NO)
+    :Deductible does NOT count to OOPMax;
+    if (service_amount < deductible_calculated?) then (YES)
+      :member_pays += service_amount\ndeductible -= service_amount\nservice_amount = 0\ncalculation_complete = TRUE;
+      stop
+    else (NO)
+      :member_pays += deductible_calculated\nservice_amount -= deductible_calculated\ndeductible_calculated = 0;
+    endif
+  endif
+  
+  if (is_deductible_before_copay?) then (YES)
+    :→ **DeductibleCostShareCoPayHandler**;
+  else (NO)
+    :→ **DeductibleCoInsuranceHandler**;
+  endif
+}
+
+' ==================== HANDLER 10 ====================
+partition "**Handler #10: DeductibleCoInsuranceHandler**" #Salmon {
+  :Apply coinsurance (percentage-based);
+  note right
+    TERMINAL HANDLER
+    LAST handler in chain
+    Always completes calculation
+  end note
+  
+  if (cost_share_coinsurance > 0?) then (NO)
+    :✓ 0% coinsurance;
+    :member_pays = 0\ncalculation_complete = TRUE;
+    stop
+  elseif (coins_applies_oop?) then (NO)
+    :Coinsurance does NOT count to OOPMax;
+    :coinsurance_amount = (rate/100) * service_amount\nmember_pays += coinsurance_amount\nservice_amount -= coinsurance_amount\ncalculation_complete = TRUE;
+    stop
+  elseif (oopmax_family_calculated == 0?) then (YES)
+    :✓ Family OOPMax MET;
+    :member_pays = 0\ncalculation_complete = TRUE;
+    stop
+  elseif (oopmax_individual_calculated == 0?) then (YES)
+    :✓ Individual OOPMax MET;
+    :member_pays = 0\ncalculation_complete = TRUE;
+    stop
+  else (NO)
+    :Calculate coinsurance\ncoinsurance = (rate/100) * service_amount;
+    if (coinsurance < individual_oopmax\nAND coinsurance < family_oopmax?) then (YES)
+      :✓ **Normal coinsurance**;
+      :member_pays += coinsurance\noopmax -= coinsurance\nservice_amount -= coinsurance\ncalculation_complete = TRUE;
+      stop
+    else (NO)
+      :⚠️ **OOPMax ceiling**;
+      :Calculate min_oopmax\nmember_pays += min_oopmax\noopmax = 0\nservice_amount -= min_oopmax\ncalculation_complete = TRUE;
+      stop
+    endif
+  endif
+}
+
+legend right
+  **Handler Types:**
+  |<#LightYellow>| Start Handler |
+  |<#LightBlue>| Routing Handler (makes decisions) |
+  |<#LightGreen>| Calculation Handler (modifies amounts) |
+  |<#Salmon>| Terminal Handler (ends calculation) |
+  
+  **Key Concepts:**
+  • **Deductible:** Amount member pays before insurance kicks in
+  • **OOPMax:** Maximum member pays in a year
+  • **Copay:** Fixed amount per service ($30)
+  • **Coinsurance:** Percentage of cost (20%)
+  
+  **Common Paths:**
+  1. Service covered → No limits → OOPMax not met → 
+     Deductible not met → Apply deductible → Coinsurance
+  2. Service covered → No limits → OOPMax not met → 
+     Deductible met → Apply copay → Coinsurance
+  3. Service covered → No limits → OOPMax MET → 
+     Member pays $0 (insurance pays 100%)
+endlegend
+
+@enduml
