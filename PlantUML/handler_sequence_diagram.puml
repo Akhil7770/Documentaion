@@ -1,0 +1,167 @@
+@startuml Handler Sequence Flow
+
+title Handler Chain Sequence - Cost Estimator Calculation Service
+
+participant "Calculation\nService" as CS
+participant "1. Service\nCoverage" as H1
+participant "2. Benefit\nLimitation" as H2
+participant "3. OOPMax" as H3
+participant "4. OOPMax\nCopay" as H4
+participant "5. Deductible" as H5
+participant "6. CostShare\nCoPay" as H6
+participant "7. Deductible\nCostShare\nCoPay" as H7
+participant "8. Deductible\nCoPay" as H8
+participant "9. Deductible\nOOPMax" as H9
+participant "10. Deductible\nCoInsurance" as H10
+
+== Common Flow: Service Covered, No Limits, Deductible Not Met ==
+
+CS -> H1: **handle(context)**\nservice_amount = $1000
+activate H1
+note right of H1: Check if service\nis covered
+
+H1 -> H1: is_service_covered = True ✓
+H1 -> H2: **→ Next Handler**
+deactivate H1
+
+activate H2
+note right of H2: Check benefit\nlimits
+
+H2 -> H2: No "limit" in accum_code ✓
+H2 -> H3: **→ Next Handler**
+deactivate H2
+
+activate H3
+note right of H3: Check OOPMax\nstatus (Routing)
+
+H3 -> H3: Has OOPMax? Yes\nOOPMax met? No
+H3 -> H5: **→ DeductibleHandler**
+deactivate H3
+
+activate H5
+note right of H5: Check deductible\nstatus (Routing)
+
+H5 -> H5: Has deductible? Yes\nDeductible met? No\nis_deductible_before_copay? Yes
+H5 -> H9: **→ DeductibleOOPMaxHandler**
+deactivate H5
+
+activate H9
+note right of H9: Apply deductible\npayment
+
+H9 -> H9: deductible_applies_oop = True\ndeductible_remaining = $500\nservice > deductible
+H9 -> H9: member_pays += $500\ndeductible = $0\noopmax -= $500\nservice = $500
+H9 -> H7: **→ DeductibleCostShareCoPayHandler**\n(deductible NOW met)
+deactivate H9
+
+activate H7
+note right of H7: Route after\ndeductible met
+
+H7 -> H7: copay_continue_when_deductible_met = False
+H7 -> H10: **→ DeductibleCoInsuranceHandler**
+deactivate H7
+
+activate H10
+note right of H10: Apply coinsurance\n(TERMINAL)
+
+H10 -> H10: coinsurance = 20%\nAmount = $500 * 0.20 = $100
+H10 -> H10: member_pays += $100\noopmax -= $100\nservice = $400
+H10 -> H10: **calculation_complete = TRUE** ✓
+return **Final Result**:\nmember_pays = $600\n($500 deductible + $100 coinsurance)
+
+== Alternative Flow: Service Covered, Deductible Already Met ==
+
+CS -> H1: **handle(context)**\nservice_amount = $1000
+activate H1
+H1 -> H1: is_service_covered = True ✓
+H1 -> H2: → Next
+deactivate H1
+
+activate H2
+H2 -> H2: No limits ✓
+H2 -> H3: → Next
+deactivate H2
+
+activate H3
+H3 -> H3: OOPMax not met
+H3 -> H5: → DeductibleHandler
+deactivate H3
+
+activate H5
+note right of H5: Deductible\nalready = $0
+
+H5 -> H5: deductible_family_calculated = $0 ✓
+H5 -> H7: **→ DeductibleCostShareCoPayHandler**
+deactivate H5
+
+activate H7
+H7 -> H7: copay_continue_when_deductible_met = True\ncost_share_copay = $30
+H7 -> H8: **→ DeductibleCoPayHandler**
+deactivate H7
+
+activate H8
+note right of H8: Apply copay
+
+H8 -> H8: OOPMax not met\ncopay_applies_oop = True\ncopay < service_amount
+H8 -> H8: member_pays += $30\noopmax -= $30\nservice = $970
+H8 -> H10: **→ DeductibleCoInsuranceHandler**
+deactivate H8
+
+activate H10
+H10 -> H10: coinsurance = 20%\n$970 * 0.20 = $194
+H10 -> H10: member_pays += $194\n**calculation_complete = TRUE** ✓
+return **Final Result**:\nmember_pays = $224\n($30 copay + $194 coinsurance)
+
+== Alternative Flow: OOPMax Already Met ==
+
+CS -> H1: **handle(context)**\nservice_amount = $1000
+activate H1
+H1 -> H1: is_service_covered = True ✓
+H1 -> H2: → Next
+deactivate H1
+
+activate H2
+H2 -> H2: No limits ✓
+H2 -> H3: → Next
+deactivate H2
+
+activate H3
+note right of H3: OOPMax check
+
+H3 -> H3: oopmax_individual_calculated = $0 ✓
+H3 -> H4: **→ OOPMaxCopayHandler**
+deactivate H3
+
+activate H4
+note right of H4: OOPMax met\ncheck if copay continues
+
+H4 -> H4: cost_share_copay = $30\ncopay_continue_when_oop_met = False
+H4 -> H4: member_pays = $0\n**calculation_complete = TRUE** ✓
+return **Final Result**:\nmember_pays = $0\n(Insurance pays 100%!)
+
+== Alternative Flow: Service NOT Covered ==
+
+CS -> H1: **handle(context)**\nservice_amount = $1000
+activate H1
+note right of H1: First check:\nIs service covered?
+
+H1 -> H1: is_service_covered = False ❌
+H1 -> H1: member_pays = $1000\nservice_amount = $0\n**calculation_complete = TRUE** ✓
+return **Final Result**:\nmember_pays = $1000\n(Member pays 100%)
+
+note over CS,H10
+  **Key Points:**
+  
+  1. **Handler Chain** = Chain of Responsibility pattern
+  2. Each handler can **MODIFY** context or **ROUTE** to next handler
+  3. **calculation_complete = TRUE** stops the chain
+  4. Handler #10 (DeductibleCoInsurance) is typically the LAST handler
+  5. **Dynamic Routing:** Next handler depends on context values
+  
+  **Handler Types:**
+  • **Routing Handlers:** #3, #5, #7 (make decisions, don't calculate)
+  • **Calculation Handlers:** #6, #8, #9 (calculate and route)
+  • **Terminal Handlers:** #4, #10 (can end calculation)
+  • **Hybrid Handler:** #2 (calculates and can terminate)
+end note
+
+@enduml
